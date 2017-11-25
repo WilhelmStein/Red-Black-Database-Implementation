@@ -1,6 +1,8 @@
 #ifndef AM_H_
 #define AM_H_
 
+typedef enum { false , true } bool; 
+
 /* Error codes */
 
 extern int AM_errno;

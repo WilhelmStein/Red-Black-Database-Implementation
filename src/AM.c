@@ -84,8 +84,22 @@ int AM_CreateIndex(char *fileName,
 
 int AM_DestroyIndex(char *fileName)
 {
+	bool isOpen = false;
+	for (unsigned i = 0; i < MAXOPENFILES; i++)
+	{
+		if (fTable[i].fd != UNDEFINED && !strcmp(fileName, fTable[i].fileName))
+		{
+			isOpen = true;
+			break;
+		}
+	}
 
-	return AME_OK;
+	if (!isOpen)
+	{
+		return (AM_errno = (!remove(fileName) ? AME_OK : AME_ERROR));
+	}
+
+	return (AM_errno = AME_ERROR);
 }
 
 int AM_OpenIndex (char *fileName)
@@ -93,7 +107,7 @@ int AM_OpenIndex (char *fileName)
 	int fd;
 	CALL_OR_EXIT(BF_OpenFile(fileName, &fd));
 	
-	int i;
+	unsigned i;
 	for (i = 0; i < MAXOPENFILES; i++)
 	{
 		if (fTable[i].fd == UNDEFINED)
@@ -105,7 +119,12 @@ int AM_OpenIndex (char *fileName)
 		}
 	}
 
-	return (i > MAXOPENFILES ? AME_ERROR : i);
+	if (i < MAXOPENFILES)
+	{
+		return i;
+	}
+
+	return (AM_errno = AME_ERROR);
 }
 
 
@@ -116,14 +135,16 @@ int AM_CloseIndex (int fileDesc)
 	{
 		if (fileDesc == fTable[i].fd)
 		{
-			free(fTable[i].fileName);
 			CALL_OR_EXIT(BF_CloseFile(fTable[i].fd));
+			free(fTable[i].fileName);
 			fTable[i].fd = UNDEFINED;
 			break;
 		}
 	}
 
-	return (i > MAXOPENFILES ? AME_ERROR : AME_OK);
+	// Check for scans !!!
+
+	return (AM_errno = (i > MAXOPENFILES ? AME_ERROR : AME_OK));
 }
 
 int AM_InsertEntry(int fileDesc, void *value1, void *value2) {
