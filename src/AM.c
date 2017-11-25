@@ -119,12 +119,7 @@ int AM_OpenIndex (char *fileName)
 		}
 	}
 
-	if (i < MAXOPENFILES)
-	{
-		return i;
-	}
-
-	return (AM_errno = AME_ERROR);
+	return (i < MAXOPENFILES ? i : (AM_errno = AME_ERROR));
 }
 
 
