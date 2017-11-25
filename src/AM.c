@@ -132,7 +132,7 @@ int AM_InsertEntry(int fileDesc, void *value1, void *value2) {
 	CALL_OR_EXIT( BF_GetBlock(fileDesc, 0, metaBlock) );
 	char *metaContents = BF_Block_GetData(metaBlock);
 	char rootStr[12];
-	memcpy(rootStr, metaContents[11], 12);
+	memcpy(rootStr, &metaContents[11], 12);
 	int rootInt = atoi(rootStr);
 	if(rootInt == 0)
 	{
@@ -143,7 +143,7 @@ int AM_InsertEntry(int fileDesc, void *value1, void *value2) {
 	CALL_OR_EXIT( BF_GetBlockCounter(fileDesc, &blockCount) );
 	char intToStr[12];
 	sprintf(intToStr, "%d", blockCount);
-	memcpy(metaContents[11], intToStr, 12);
+	memcpy(&metaContents[11], intToStr, 12);
 
 
 	}
