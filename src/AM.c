@@ -83,13 +83,11 @@ int AM_CreateIndex(char *fileName,
 	return AME_OK;
 }
 
-
 int AM_DestroyIndex(char *fileName)
 {
 
 	return AME_OK;
 }
-
 
 int AM_OpenIndex (char *fileName)
 {
