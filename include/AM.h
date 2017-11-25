@@ -9,6 +9,19 @@ extern int AM_errno;
 #define AME_EOF -1
 #define AME_ERROR -2
 
+/* File variables */
+
+#define MAXOPENFILES 20
+#define UNDEFINED -1;
+
+typedef struct _fData
+{
+  int fd;
+  char * fileName;
+} fData;
+
+extern fData fTable[MAXOPENFILES];
+
 #define EQUAL 1
 #define NOT_EQUAL 2
 #define LESS_THAN 3
