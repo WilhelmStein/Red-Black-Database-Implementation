@@ -17,7 +17,7 @@ fData fTable[MAXOPENFILES];
 #define ATTRLENGTH1 (data[2])  //int
 #define ATTRTYPE2	(data[3])  //char
 #define ATTRLENGTH2 (data[4])  //int
-#define ROOT		(data[5]) //int
+#define ROOT		(data[5])  //int
 #define FILENAME	(&data[9]) //char*
  
 
@@ -173,7 +173,7 @@ int AM_InsertEntry(int fileDesc, void *value1, void *value2) {
 		CALL_OR_EXIT( BF_AllocateBlock(fileDesc, newBlock) );
 		char *data = BF_Block_GetData(newBlock);
 
-		data[0] = RED;
+		IDENTIFIER = RED;
 
 		int blockCount;
 		CALL_OR_EXIT( BF_GetBlockCounter(fileDesc, &blockCount) );
