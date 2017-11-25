@@ -1,7 +1,11 @@
 #ifndef AM_H_
 #define AM_H_
 
+/* General Types */
+
 typedef enum { false , true } bool; 
+
+#define UNDEFINED -1
 
 /* Error codes */
 
@@ -11,26 +15,29 @@ extern int AM_errno;
 #define AME_EOF -1
 #define AME_ERROR -2
 
-/* File variables */
+/* File Types */
 
 #define MAXOPENFILES 20
-#define UNDEFINED -1
 
-typedef struct _fData
+typedef struct _fileData
 {
   int fileDesc;
   char * fileName;
-} fData;
+} fileData;
 
-extern fData fTable[MAXOPENFILES];
+extern fileData fileTable[MAXOPENFILES];
 
-/* Scan variables */
+/* Scan Types */
 
-typedef struct _sData
+#define MAXSCANS 20
+
+typedef struct _scanData
 {
   int fileDesc;
-  void * recordId;
-} sData;
+  void * recordKey;
+} scanData;
+
+extern scanData scanTable[MAXSCANS];
 
 #define EQUAL 1
 #define NOT_EQUAL 2
@@ -98,3 +105,4 @@ void AM_Close();
 
 
 #endif /* AM_H_ */
+
