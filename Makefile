@@ -22,3 +22,5 @@ bf_main3:
 	@echo " Compile bf_main3 ...";
 	gcc -I ./include/ -L ./lib/ -Wl,-rpath,./lib/ ./examples/bf_main3.c -lbf -o ./build/bf_main3 -O2
 
+.PHONY clean:
+	rm EMP-*
