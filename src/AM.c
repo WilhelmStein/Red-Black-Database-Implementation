@@ -8,9 +8,18 @@ int AM_errno = AME_OK;
 
 fData fTable[MAXOPENFILES];
 
-#define INDEX ('i')
-#define BLACK ('b')
-#define RED   ('r')
+#define INDEX ('I')
+#define BLACK ('B')
+#define RED   ('R')
+
+#define IDENTIFIER  (data[0])  //char
+#define ATTRTYPE1	(data[1])  //char	
+#define ATTRLENGTH1 (data[2])  //int
+#define ATTRTYPE2	(data[3])  //char
+#define ATTRLENGTH2 (data[4])  //int
+#define ROOT		(data[5]) //int
+#define FILENAME	(&data[9]) //char*
+ 
 
 #define CALL_OR_EXIT(call)		\
 {                           	\
@@ -50,36 +59,36 @@ int AM_CreateIndex(char *fileName,
 
   	///////////////////////////////////////////////////////////////////////////////////////////////////////////////////
   	// +-------++-------------+-------------+---------------+-------------+---------------+--------+---------------+ //
-	// | BYTES ||     1       |      1      |      4        |      1      |      4        |   12   | 1 - (512-23)  | //
+	// | BYTES ||     1       |      1      |      1        |      1      |      1        |   4    | 1 - (512-9)   | //
 	// | VARS  || identifier  |  attrType1  |  attrLength1  |  attrType2  |  attrLength2  |  root  |   fileName    | //
 	// +-------++-------------+-------------+---------------+-------------+---------------+--------+---------------+ //
 	///////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-	data[0] = INDEX; 
 
-	memcpy(&data[1], &attrType1, 1);
+	IDENTIFIER = INDEX; 
 
-	char intToStr[4];
-	sprintf(intToStr, "%d", attrLength1);
-	memcpy(&data[1 + 1], intToStr, sizeof(intToStr));
+	memcpy(&ATTRTYPE1, &attrType1, 1);
 
-	memcpy(&data[1 + 1 + sizeof(intToStr)], &attrType2, 1);
+	memcpy(&ATTRLENGTH1, &attrLength1, 1);
 
-	sprintf(intToStr, "%d", attrLength2);
-	memcpy(&data[1 + 1 + sizeof(intToStr) + 1], intToStr, sizeof(intToStr));
+	memcpy(&ATTRTYPE2, &attrType2, 1);
 
-	char rootStr[12];
-	sprintf(rootStr, "%d", 0);
-	memcpy(&data[1 + 1 + sizeof(intToStr) + 1 + sizeof(intToStr)], rootStr, sizeof(rootStr));
+	memcpy(&ATTRLENGTH2, &attrLength2, 1);
 
-	memcpy(&data[1 + 1 + sizeof(intToStr) + 1 + sizeof(intToStr) + sizeof(rootStr)], fileName, strlen(fileName) + 1);
+	int zero = 0;
+	memcpy(&ROOT, &zero, 4);
 
-	printf("id = %c\n", data[0]);
-	printf("attrType1 = %c\n", data[1]);
-	printf("attrLength1 = %s\n", &data[2]);
-	printf("attrType2 = %c\n", data[6]);
-	printf("attrLength2 = %s\n", &data[7]);
-	printf("root at: %s\n", &data[11]);
-	printf("fileName = %s\n\n", &data[23]);
+	memcpy(FILENAME, fileName, strlen(fileName) + 1);
+
+	printf("id = %c\n", IDENTIFIER);
+	printf("attrType1 = %c\n", ATTRTYPE1);
+	printf("attrLength1 = %d\n", ATTRLENGTH1);
+	printf("attrType2 = %c\n", ATTRTYPE2);
+	printf("attrLength2 = %d\n", ATTRLENGTH2);
+	printf("root at: %d\n", ROOT);
+	printf("fileName = %s\n\n", FILENAME);
+
+	CALL_OR_EXIT(BF_UnpinBlock(block));
+	CALL_OR_EXIT(BF_CloseFile(fileDesc));
 
 	return AME_OK;
 }
@@ -159,15 +168,18 @@ int AM_InsertEntry(int fileDesc, void *value1, void *value2) {
 	if(rootInt == 0)
 	{
 
-	BF_Block *newBlock;
-	BF_Block_Init(&newBlock);
-	CALL_OR_EXIT( BF_AllocateBlock(fileDesc, newBlock) );
+		BF_Block *newBlock;
+		BF_Block_Init(&newBlock);
+		CALL_OR_EXIT( BF_AllocateBlock(fileDesc, newBlock) );
+		char *data = BF_Block_GetData(newBlock);
 
-	int blockCount;
-	CALL_OR_EXIT( BF_GetBlockCounter(fileDesc, &blockCount) );
-	char intToStr[12];
-	sprintf(intToStr, "%d", blockCount);
-	memcpy(&metaContents[11], intToStr, 12);
+		data[0] = RED;
+
+		int blockCount;
+		CALL_OR_EXIT( BF_GetBlockCounter(fileDesc, &blockCount) );
+		char intToStr[12];
+		sprintf(intToStr, "%d", blockCount);
+		memcpy(&metaContents[11], intToStr, 12);
 	}
 	return AME_OK;
 }
