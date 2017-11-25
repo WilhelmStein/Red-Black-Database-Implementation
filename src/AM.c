@@ -6,7 +6,8 @@
 
 int AM_errno = AME_OK;
 
-fData fTable[MAXOPENFILES];
+fileData fileTable[MAXOPENFILES];
+scanData scanTable[MAXSCANS];
 
 #define INDEX ('I')
 #define BLACK ('B')
