@@ -8,6 +8,10 @@ int AM_errno = AME_OK;
 
 fData fTable[MAXOPENFILES];
 
+#define INDEX ('i')
+#define BLACK ('b')
+#define RED   ('r')
+
 #define CALL_OR_EXIT(call)		\
 {                           	\
 	BF_ErrorCode code = call; 	\
@@ -50,7 +54,7 @@ int AM_CreateIndex(char *fileName,
 	// | VARS  || identifier  |  attrType1  |  attrLength1  |  attrType2  |  attrLength2  |  root  |   fileName    | //
 	// +-------++-------------+-------------+---------------+-------------+---------------+--------+---------------+ //
 	///////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-	data[0] = 'i'; 
+	data[0] = INDEX; 
 
 	memcpy(&data[1], &attrType1, 1);
 
@@ -146,22 +150,24 @@ int AM_InsertEntry(int fileDesc, void *value1, void *value2) {
 	BF_Block *metaBlock;
 	BF_Block_Init(&metaBlock);
 	CALL_OR_EXIT( BF_GetBlock(fileDesc, 0, metaBlock) );
+
 	char *metaContents = BF_Block_GetData(metaBlock);
 	char rootStr[12];
 	memcpy(rootStr, &metaContents[11], 12);
+
 	int rootInt = atoi(rootStr);
 	if(rootInt == 0)
 	{
+
 	BF_Block *newBlock;
 	BF_Block_Init(&newBlock);
 	CALL_OR_EXIT( BF_AllocateBlock(fileDesc, newBlock) );
+
 	int blockCount;
 	CALL_OR_EXIT( BF_GetBlockCounter(fileDesc, &blockCount) );
 	char intToStr[12];
 	sprintf(intToStr, "%d", blockCount);
 	memcpy(&metaContents[11], intToStr, 12);
-
-
 	}
 	return AME_OK;
 }
