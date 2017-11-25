@@ -21,7 +21,7 @@ void AM_Init()
 {
 	for (unsigned i = 0; i < MAXOPENFILES; i++)
 	{
-		fTable[i].fd = UNDEFINED;
+		fTable[i].fileDesc = UNDEFINED;
 		fTable[i].fileName = NULL;
 	}
 
@@ -36,12 +36,12 @@ int AM_CreateIndex(char *fileName,
 {
 	CALL_OR_EXIT(BF_CreateFile(fileName));
 
-	int fd;
+	int fileDesc;
 	BF_Block *block;
 	BF_Block_Init(&block);
 
-	CALL_OR_EXIT(BF_OpenFile(fileName, &fd));
-	CALL_OR_EXIT(BF_AllocateBlock(fd, block));
+	CALL_OR_EXIT(BF_OpenFile(fileName, &fileDesc));
+	CALL_OR_EXIT(BF_AllocateBlock(fileDesc, block));
 	char *data = BF_Block_GetData(block);
 
   	///////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -85,7 +85,7 @@ int AM_DestroyIndex(char *fileName)
 	bool isOpen = false;
 	for (unsigned i = 0; i < MAXOPENFILES; i++)
 	{
-		if (fTable[i].fd != UNDEFINED && !strcmp(fileName, fTable[i].fileName))
+		if (fTable[i].fileDesc != UNDEFINED && !strcmp(fileName, fTable[i].fileName))
 		{
 			isOpen = true;
 			break;
@@ -102,15 +102,15 @@ int AM_DestroyIndex(char *fileName)
 
 int AM_OpenIndex (char *fileName)
 {
-	int fd;
-	CALL_OR_EXIT(BF_OpenFile(fileName, &fd));
+	int fileDesc;
+	CALL_OR_EXIT(BF_OpenFile(fileName, &fileDesc));
 	
 	unsigned i;
 	for (i = 0; i < MAXOPENFILES; i++)
 	{
-		if (fTable[i].fd == UNDEFINED)
+		if (fTable[i].fileDesc == UNDEFINED)
 		{
-			fTable[i].fd = fd;
+			fTable[i].fileDesc = fileDesc;
 			fTable[i].fileName = (char *) malloc((strlen(fileName) + 1) * sizeof(char));
 			strcpy(fTable[i].fileName, fileName);
 			break;
@@ -125,13 +125,13 @@ int AM_CloseIndex (int fileDesc)
 	int i;
 	for (i = 0; i < MAXOPENFILES; i++)
 	{
-		if (fileDesc == fTable[i].fd)
+		if (fileDesc == fTable[i].fileDesc)
 		{
-			CALL_OR_EXIT(BF_CloseFile(fTable[i].fd));
+			CALL_OR_EXIT(BF_CloseFile(fTable[i].fileDesc));
 
 			free(fTable[i].fileName);
 			fTable[i].fileName = NULL;
-			fTable[i].fd = UNDEFINED;
+			fTable[i].fileDesc = UNDEFINED;
 			
 			break;
 		}
@@ -186,7 +186,7 @@ static char * errorMessage[] =
 	[AME_OK		* (-1)]	"Success...\n",
 	[AME_EOF	* (-1)]	"Reached end of file...\n",
 	[AME_ERROR	* (-1)] "General error message...\n"
-}
+};
 
 void AM_PrintError(char *errString)
 {

@@ -18,11 +18,19 @@ extern int AM_errno;
 
 typedef struct _fData
 {
-  int fd;
+  int fileDesc;
   char * fileName;
 } fData;
 
 extern fData fTable[MAXOPENFILES];
+
+/* Scan variables */
+
+typedef struct _sData
+{
+  int fileDesc;
+  void * recordId;
+} sData;
 
 #define EQUAL 1
 #define NOT_EQUAL 2
