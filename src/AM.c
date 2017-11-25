@@ -13,7 +13,7 @@ fData fTable[MAXOPENFILES];
 	BF_ErrorCode code = call; 	\
 	if(code != BF_OK) {       	\
 		BF_PrintError(code);    \
-		return AME_ERROR;       \
+		exit( AME_ERROR );		\
 	}                         	\
 }
 
@@ -25,10 +25,8 @@ void AM_Init()
 		fTable[i].fileName = NULL;
 	}
 
-	BF_Init(LRU);
-	return;
+	CALL_OR_EXIT(BF_Init(LRU));
 }
-
 
 int AM_CreateIndex(char *fileName, 
 	               char attrType1, 
@@ -122,7 +120,6 @@ int AM_OpenIndex (char *fileName)
 	return (i < MAXOPENFILES ? i : (AM_errno = AME_ERROR));
 }
 
-
 int AM_CloseIndex (int fileDesc)
 {
 	int i;
@@ -131,8 +128,11 @@ int AM_CloseIndex (int fileDesc)
 		if (fileDesc == fTable[i].fd)
 		{
 			CALL_OR_EXIT(BF_CloseFile(fTable[i].fd));
+
 			free(fTable[i].fileName);
+			fTable[i].fileName = NULL;
 			fTable[i].fd = UNDEFINED;
+			
 			break;
 		}
 	}
@@ -166,31 +166,42 @@ int AM_InsertEntry(int fileDesc, void *value1, void *value2) {
 	return AME_OK;
 }
 
-
 int AM_OpenIndexScan(int fileDesc, int op, void *value)
 {
 	return AME_OK;
 }
-
 
 void *AM_FindNextEntry(int scanDesc)
 {
 
 }
 
-
 int AM_CloseIndexScan(int scanDesc)
 {
   return AME_OK;
 }
 
+static char * errorMessage[] =
+{
+	[AME_OK		* (-1)]	"Success...\n",
+	[AME_EOF	* (-1)]	"Reached end of file...\n",
+	[AME_ERROR	* (-1)] "General error message...\n"
+}
 
 void AM_PrintError(char *errString)
 {
-
+	printf("%s%s", errString, errorMessage[AM_errno * (-1)]);
 }
 
 void AM_Close()
 {
-	
+	for (unsigned i = 0; i < MAXOPENFILES; i++)
+	{
+		if (fTable[i].fileName != NULL)
+		{
+			free(fTable[i].fileName);
+		}
+	}
+
+	CALL_OR_EXIT(BF_Close());
 }
