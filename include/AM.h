@@ -7,6 +7,7 @@ extern int AM_errno;
 
 #define AME_OK 0
 #define AME_EOF -1
+#define AME_ERROR -2
 
 #define EQUAL 1
 #define NOT_EQUAL 2
