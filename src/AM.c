@@ -9,9 +9,18 @@ int AM_errno = AME_OK;
 fileData fileTable[MAXOPENFILES];
 scanData scanTable[MAXSCANS];
 
-#define INDEX ('i')
-#define BLACK ('b')
-#define RED   ('r')
+#define INDEX ('I')
+#define BLACK ('B')
+#define RED   ('R')
+
+#define IDENTIFIER  (0)  //char
+#define ATTRTYPE1	(1)  //char	
+#define ATTRLENGTH1 (2)  //int
+#define ATTRTYPE2	(3)  //char
+#define ATTRLENGTH2 (4)  //int
+#define ROOT		(5)  //int
+#define FILENAME	(9) //char*
+ 
 
 #define CALL_OR_EXIT(call)		\
 {                           	\
@@ -57,38 +66,38 @@ int AM_CreateIndex(char *fileName,
 
   	///////////////////////////////////////////////////////////////////////////////////////////////////////////////////
   	// +-------++-------------+-------------+---------------+-------------+---------------+--------+---------------+ //
-	// | BYTES ||     1       |      1      |      4        |      1      |      4        |   12   | 1 - (512-23)  | //
+	// | BYTES ||     1       |      1      |      1        |      1      |      1        |   4    | 1 - (512-9)   | //
 	// | VARS  || identifier  |  attrType1  |  attrLength1  |  attrType2  |  attrLength2  |  root  |   fileName    | //
 	// +-------++-------------+-------------+---------------+-------------+---------------+--------+---------------+ //
 	///////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-	data[0] = INDEX; 
 
-	memcpy(&data[1], &attrType1, 1);
+	data[IDENTIFIER] = INDEX; 
 
-	char intToStr[4];
-	sprintf(intToStr, "%d", attrLength1);
-	memcpy(&data[1 + 1], intToStr, sizeof(intToStr));
+	memcpy(&data[ATTRTYPE1], &attrType1, 1);
 
-	memcpy(&data[1 + 1 + sizeof(intToStr)], &attrType2, 1);
+	memcpy(&data[ATTRLENGTH1], &attrLength1, 1);
 
-	sprintf(intToStr, "%d", attrLength2);
-	memcpy(&data[1 + 1 + sizeof(intToStr) + 1], intToStr, sizeof(intToStr));
+	memcpy(&data[ATTRTYPE2], &attrType2, 1);
 
-	char rootStr[12];
-	sprintf(rootStr, "%d", 0);
-	memcpy(&data[1 + 1 + sizeof(intToStr) + 1 + sizeof(intToStr)], rootStr, sizeof(rootStr));
+	memcpy(&data[ATTRLENGTH2], &attrLength2, 1);
 
-	memcpy(&data[1 + 1 + sizeof(intToStr) + 1 + sizeof(intToStr) + sizeof(rootStr)], fileName, strlen(fileName) + 1);
+	int zero = 0;
+	memcpy(&data[ROOT], &zero, 4);
 
-	printf("id = %c\n", data[0]);
-	printf("attrType1 = %c\n", data[1]);
-	printf("attrLength1 = %s\n", &data[2]);
-	printf("attrType2 = %c\n", data[6]);
-	printf("attrLength2 = %s\n", &data[7]);
-	printf("root at: %s\n", &data[11]);
-	printf("fileName = %s\n\n", &data[23]);
+	memcpy(&data[FILENAME], fileName, strlen(fileName) + 1);
 
-	return AME_OK;
+	printf("id = %c\n", data[IDENTIFIER]);
+	printf("attrType1 = %c\n", data[ATTRTYPE1]);
+	printf("attrLength1 = %d\n", data[ATTRLENGTH1]);
+	printf("attrType2 = %c\n", data[ATTRTYPE2]);
+	printf("attrLength2 = %d\n", data[ATTRLENGTH2]);
+	printf("root at: %d\n", data[ROOT]);
+	printf("fileName = %s\n\n", &data[FILENAME]);
+
+	CALL_OR_EXIT(BF_UnpinBlock(block));
+	CALL_OR_EXIT(BF_CloseFile(fileDesc));
+
+	return AM_errno = AME_OK;
 }
 
 // Utility Function :
@@ -198,23 +207,23 @@ int AM_InsertEntry(int fileDesc, void *value1, void *value2) {
 	BF_Block_Init(&metaBlock);
 	CALL_OR_EXIT( BF_GetBlock(fileDesc, 0, metaBlock) );
 
-	char *metaContents = BF_Block_GetData(metaBlock);
-	char rootStr[12];
-	memcpy(rootStr, &metaContents[11], 12);
+	char *metaData = BF_Block_GetData(metaBlock);
 
-	int rootInt = atoi(rootStr);
-	if(rootInt == 0)
+	int root = ROOT;
+	if(root == 0)
 	{
 
-	BF_Block *newBlock;
-	BF_Block_Init(&newBlock);
-	CALL_OR_EXIT( BF_AllocateBlock(fileDesc, newBlock) );
+		BF_Block *newBlock;
+		BF_Block_Init(&newBlock);
+		CALL_OR_EXIT( BF_AllocateBlock(fileDesc, newBlock) );
+		char *data = BF_Block_GetData(newBlock);
 
-	int blockCount;
-	CALL_OR_EXIT( BF_GetBlockCounter(fileDesc, &blockCount) );
-	char intToStr[12];
-	sprintf(intToStr, "%d", blockCount);
-	memcpy(&metaContents[11], intToStr, 12);
+		data[IDENTIFIER] = RED;
+
+		int blockCount;
+		CALL_OR_EXIT( BF_GetBlockCounter(fileDesc, &blockCount) );
+
+		memcpy(&metaData[ROOT], &blockCount, 4);
 	}
 	return AME_OK;
 }
