@@ -102,7 +102,7 @@ int AM_OpenIndex (char *fileName)
 		if (fTable[i].fd == UNDEFINED)
 		{
 			fTable[i].fd = fd;
-			fTable[i].fileName = (char *) malloc((strlen(filenName) + 1) * sizeof(char))
+			fTable[i].fileName = (char *) malloc((strlen(fileName) + 1) * sizeof(char));
 			strcpy(fTable[i].fileName, fileName);
 			break;
 		}
@@ -117,7 +117,7 @@ int AM_CloseIndex (int fileDesc)
 	int i;
 	for (i = 0; i < MAXOPENFILES; i++)
 	{
-		if (!strcmp(fTable[i].fileName, fileName))
+		if (fileDesc == fTable[i].fd)
 		{
 			free(fTable[i].fileName);
 			CALL_OR_EXIT(BF_CloseFile(fTable[i].fd));
