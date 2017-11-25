@@ -12,13 +12,13 @@ fData fTable[MAXOPENFILES];
 #define BLACK ('B')
 #define RED   ('R')
 
-#define IDENTIFIER  (data[0])  //char
-#define ATTRTYPE1	(data[1])  //char	
-#define ATTRLENGTH1 (data[2])  //int
-#define ATTRTYPE2	(data[3])  //char
-#define ATTRLENGTH2 (data[4])  //int
-#define ROOT		(data[5])  //int
-#define FILENAME	(&data[9]) //char*
+#define IDENTIFIER  (0)  //char
+#define ATTRTYPE1	(1)  //char	
+#define ATTRLENGTH1 (2)  //int
+#define ATTRTYPE2	(3)  //char
+#define ATTRLENGTH2 (4)  //int
+#define ROOT		(5)  //int
+#define FILENAME	(9) //char*
  
 
 #define CALL_OR_EXIT(call)		\
@@ -64,33 +64,33 @@ int AM_CreateIndex(char *fileName,
 	// +-------++-------------+-------------+---------------+-------------+---------------+--------+---------------+ //
 	///////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-	IDENTIFIER = INDEX; 
+	data[IDENTIFIER] = INDEX; 
 
-	memcpy(&ATTRTYPE1, &attrType1, 1);
+	memcpy(&data[ATTRTYPE1], &attrType1, 1);
 
-	memcpy(&ATTRLENGTH1, &attrLength1, 1);
+	memcpy(&data[ATTRLENGTH1], &attrLength1, 1);
 
-	memcpy(&ATTRTYPE2, &attrType2, 1);
+	memcpy(&data[ATTRTYPE2], &attrType2, 1);
 
-	memcpy(&ATTRLENGTH2, &attrLength2, 1);
+	memcpy(&data[ATTRLENGTH2], &attrLength2, 1);
 
 	int zero = 0;
-	memcpy(&ROOT, &zero, 4);
+	memcpy(&data[ROOT], &zero, 4);
 
-	memcpy(FILENAME, fileName, strlen(fileName) + 1);
+	memcpy(&data[FILENAME], fileName, strlen(fileName) + 1);
 
-	printf("id = %c\n", IDENTIFIER);
-	printf("attrType1 = %c\n", ATTRTYPE1);
-	printf("attrLength1 = %d\n", ATTRLENGTH1);
-	printf("attrType2 = %c\n", ATTRTYPE2);
-	printf("attrLength2 = %d\n", ATTRLENGTH2);
-	printf("root at: %d\n", ROOT);
-	printf("fileName = %s\n\n", FILENAME);
+	printf("id = %c\n", data[IDENTIFIER]);
+	printf("attrType1 = %c\n", data[ATTRTYPE1]);
+	printf("attrLength1 = %d\n", data[ATTRLENGTH1]);
+	printf("attrType2 = %c\n", data[ATTRTYPE2]);
+	printf("attrLength2 = %d\n", data[ATTRLENGTH2]);
+	printf("root at: %d\n", data[ROOT]);
+	printf("fileName = %s\n\n", &data[FILENAME]);
 
 	CALL_OR_EXIT(BF_UnpinBlock(block));
 	CALL_OR_EXIT(BF_CloseFile(fileDesc));
 
-	return AME_OK;
+	return AM_errno = AME_OK;
 }
 
 int AM_DestroyIndex(char *fileName)
@@ -160,12 +160,10 @@ int AM_InsertEntry(int fileDesc, void *value1, void *value2) {
 	BF_Block_Init(&metaBlock);
 	CALL_OR_EXIT( BF_GetBlock(fileDesc, 0, metaBlock) );
 
-	char *metaContents = BF_Block_GetData(metaBlock);
-	char rootStr[12];
-	memcpy(rootStr, &metaContents[11], 12);
+	char *metaData = BF_Block_GetData(metaBlock);
 
-	int rootInt = atoi(rootStr);
-	if(rootInt == 0)
+	int root = ROOT;
+	if(root == 0)
 	{
 
 		BF_Block *newBlock;
@@ -173,13 +171,12 @@ int AM_InsertEntry(int fileDesc, void *value1, void *value2) {
 		CALL_OR_EXIT( BF_AllocateBlock(fileDesc, newBlock) );
 		char *data = BF_Block_GetData(newBlock);
 
-		IDENTIFIER = RED;
+		data[IDENTIFIER] = RED;
 
 		int blockCount;
 		CALL_OR_EXIT( BF_GetBlockCounter(fileDesc, &blockCount) );
-		char intToStr[12];
-		sprintf(intToStr, "%d", blockCount);
-		memcpy(&metaContents[11], intToStr, 12);
+
+		memcpy(&metaData[ROOT], &blockCount, 4);
 	}
 	return AME_OK;
 }
