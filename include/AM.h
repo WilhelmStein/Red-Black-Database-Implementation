@@ -12,7 +12,7 @@ extern int AM_errno;
 /* File variables */
 
 #define MAXOPENFILES 20
-#define UNDEFINED -1;
+#define UNDEFINED -1
 
 typedef struct _fData
 {
