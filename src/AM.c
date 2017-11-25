@@ -34,18 +34,28 @@ int AM_CreateIndex(char *fileName,
   CALL_OR_EXIT(BF_AllocateBlock(fd, block));
   char *data = BF_Block_GetData(block);
 
-  memcpy(&data[0], fileName, strlen(fileName) + 1);
 
-  memcpy(&data[strlen(fileName) + 1], &attrType1, 1);
+  // BYTES         1          
+  // VARS      identifier  -  attrType1  -  attrLength1  -  attrType2  -  attrLength2  -  fileName
+  //
+  //
+
+  data[0] = 'i';
+
+  memcpy(&data[1], fileName, strlen(fileName) + 1);
+
+  memcpy(&data[1 + strlen(fileName) + 1], &attrType1, 1);
 
   char intToStr[12];
   sprintf(intToStr, "%d", attrLength1);
-  memcpy(&data[strlen(fileName) + 2], intToStr, sizeof(intToStr));
-
-  memcpy(&data[strlen(fileName) + 2 + sizeof(intToStr)], &attrType2, 1);
+  
+  memcpy(&data[1 + strlen(fileName) + 1 + 1 + sizeof(intToStr)], &attrType2, 1);
 
   sprintf(intToStr, "%d", attrLength2);
-  memcpy(&data[strlen(fileName) + 3 + sizeof(intToStr)], intToStr, sizeof(intToStr));
+  memcpy(&data[1 + strlen(fileName) + 1 + 1 + sizeof(intToStr) + 1], intToStr, sizeof(intToStr));
+
+  memcpy(&data[1 + strlen(fileName) + 1 + 1], intToStr, sizeof(intToStr));
+
   return AME_OK;
 }
 
