@@ -2,6 +2,7 @@
 #include "bf.h"
 #include <string.h>
 #include <stdio.h>
+#include <stdlib.h>
 
 int AM_errno = AME_OK;
 
