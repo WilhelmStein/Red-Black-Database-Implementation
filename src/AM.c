@@ -192,7 +192,7 @@ static char * errorMessage[] =
 	[AME_OK		* (-1)]	"Success...\n",
 	[AME_EOF	* (-1)]	"Reached end of file...\n",
 	[AME_ERROR	* (-1)] "General error message...\n"
-}
+};
 
 void AM_PrintError(char *errString)
 {
