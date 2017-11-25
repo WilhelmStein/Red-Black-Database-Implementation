@@ -6,7 +6,8 @@
 
 int AM_errno = AME_OK;
 
-fData fTable[MAXOPENFILES];
+fileData fileTable[MAXOPENFILES];
+scanData scanTable[MAXSCANS];
 
 #define INDEX ('i')
 #define BLACK ('b')
@@ -25,8 +26,14 @@ void AM_Init()
 {
 	for (unsigned i = 0; i < MAXOPENFILES; i++)
 	{
-		fTable[i].fileDesc = UNDEFINED;
-		fTable[i].fileName = NULL;
+		fileTable[i].fileDesc = UNDEFINED;
+		fileTable[i].fileName = NULL;
+	}
+
+	for (unsigned i = 0; i < MAXSCANS; i++)
+	{
+		scanTable[i].fileDesc = UNDEFINED;
+		scanTable[i].recordKey = NULL;
 	}
 
 	CALL_OR_EXIT(BF_Init(LRU));
@@ -84,20 +91,46 @@ int AM_CreateIndex(char *fileName,
 	return AME_OK;
 }
 
+// Utility Function :
+// The user needs to take care of
+// opening and closing the specified file
+static bool isAM (const int fileDesc)
+{
+	BF_Block * block;
+	BF_Block_Init(&block);
+	CALL_OR_EXIT(BF_GetBlock(fileDesc, 0, block));
+
+	const char * const data = BF_Block_GetData(block);
+	bool flag = (IDENTIFIER == INDEX);
+
+	CALL_OR_EXIT(BF_UnpinBlock(block));
+
+	return flag;
+}
+
 int AM_DestroyIndex(char *fileName)
 {
 	bool isOpen = false;
 	for (unsigned i = 0; i < MAXOPENFILES; i++)
 	{
-		if (fTable[i].fileDesc != UNDEFINED && !strcmp(fileName, fTable[i].fileName))
+		if (fileTable[i].fileDesc != UNDEFINED && !strcmp(fileName, fileTable[i].fileName))
 		{
 			isOpen = true;
+
 			break;
 		}
 	}
 
 	if (!isOpen)
 	{
+		int fileDesc;
+		CALL_OR_EXIT(BF_OpenFile(fileName, &fileDesc));
+
+		if (!isAM(fileDesc))
+			return (AM_errno = AME_ERROR);
+
+		CALL_OR_EXIT(BF_CloseFile(fileDesc));
+
 		return (AM_errno = (!remove(fileName) ? AME_OK : AME_ERROR));
 	}
 
@@ -108,15 +141,21 @@ int AM_OpenIndex (char *fileName)
 {
 	int fileDesc;
 	CALL_OR_EXIT(BF_OpenFile(fileName, &fileDesc));
+
+	if (!isAM(fileDesc))
+		return (AM_errno = AME_ERROR);
+
+	AM_errno = AME_OK;
 	
 	unsigned i;
 	for (i = 0; i < MAXOPENFILES; i++)
 	{
-		if (fTable[i].fileDesc == UNDEFINED)
+		if (fileTable[i].fileDesc == UNDEFINED)
 		{
-			fTable[i].fileDesc = fileDesc;
-			fTable[i].fileName = (char *) malloc((strlen(fileName) + 1) * sizeof(char));
-			strcpy(fTable[i].fileName, fileName);
+			fileTable[i].fileDesc = fileDesc;
+			fileTable[i].fileName = (char *) malloc((strlen(fileName) + 1) * sizeof(char));
+			strcpy(fileTable[i].fileName, fileName);
+
 			break;
 		}
 	}
@@ -126,27 +165,35 @@ int AM_OpenIndex (char *fileName)
 
 int AM_CloseIndex (int fileDesc)
 {
+	if (!isAM(fileDesc))
+		return (AM_errno = AME_ERROR);
+
 	int i;
+	for (i = 0; i < MAXSCANS; i++)
+		if (fileDesc == scanTable[i].fileDesc)
+			return (AM_errno = AME_ERROR);
+
 	for (i = 0; i < MAXOPENFILES; i++)
 	{
-		if (fileDesc == fTable[i].fileDesc)
+		if (fileDesc == fileTable[i].fileDesc)
 		{
-			CALL_OR_EXIT(BF_CloseFile(fTable[i].fileDesc));
+			CALL_OR_EXIT(BF_CloseFile(fileTable[i].fileDesc));
 
-			free(fTable[i].fileName);
-			fTable[i].fileName = NULL;
-			fTable[i].fileDesc = UNDEFINED;
+			free(fileTable[i].fileName);
+			fileTable[i].fileName = NULL;
+			fileTable[i].fileDesc = UNDEFINED;
 			
 			break;
 		}
 	}
 
-	// Check for scans !!!
-
 	return (AM_errno = (i > MAXOPENFILES ? AME_ERROR : AME_OK));
 }
 
 int AM_InsertEntry(int fileDesc, void *value1, void *value2) {
+	if (!isAM(fileDesc))
+		return (AM_errno = AME_ERROR);
+
 	BF_Block *metaBlock;
 	BF_Block_Init(&metaBlock);
 	CALL_OR_EXIT( BF_GetBlock(fileDesc, 0, metaBlock) );
@@ -174,17 +221,21 @@ int AM_InsertEntry(int fileDesc, void *value1, void *value2) {
 
 int AM_OpenIndexScan(int fileDesc, int op, void *value)
 {
+	if (!isAM(fileDesc))
+		return (AM_errno = AME_ERROR);
+
 	return AME_OK;
 }
 
 void *AM_FindNextEntry(int scanDesc)
 {
-
+	
 }
 
 int AM_CloseIndexScan(int scanDesc)
 {
-  return AME_OK;
+
+	return AME_OK;
 }
 
 static char * errorMessage[] =
@@ -202,12 +253,12 @@ void AM_PrintError(char *errString)
 void AM_Close()
 {
 	for (unsigned i = 0; i < MAXOPENFILES; i++)
-	{
-		if (fTable[i].fileName != NULL)
-		{
-			free(fTable[i].fileName);
-		}
-	}
+		if (fileTable[i].fileName != NULL)
+			free(fileTable[i].fileName);
+
+	for (unsigned i = 0; i < MAXSCANS; i++)
+		if (scanTable[i].recordKey != NULL)
+			free(scanTable[i].recordKey);
 
 	CALL_OR_EXIT(BF_Close());
 }
