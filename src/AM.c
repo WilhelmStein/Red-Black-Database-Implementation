@@ -13,13 +13,15 @@ scanData scanTable[MAXSCANS];
 #define BLACK ('B')
 #define RED   ('R')
 
+#define DATA        (1)  //arbitrary
+
 #define IDENTIFIER  (0)  //char
-#define ATTRTYPE1	(1)  //char	
+#define ATTRTYPE1	  (1)  //char	
 #define ATTRLENGTH1 (2)  //int
-#define ATTRTYPE2	(3)  //char
+#define ATTRTYPE2	  (3)  //char
 #define ATTRLENGTH2 (4)  //int
-#define ROOT		(5)  //int
-#define FILENAME	(9) //char*
+#define ROOT		    (5)  //int
+#define FILENAME	  (9) //char*
  
 
 #define CALL_OR_EXIT(call)		\
@@ -210,6 +212,7 @@ int AM_InsertEntry(int fileDesc, void *value1, void *value2) {
 	char *metaData = BF_Block_GetData(metaBlock);
 
 	int root = ROOT;
+  //First Insert//
 	if(root == 0)
 	{
 
@@ -222,8 +225,11 @@ int AM_InsertEntry(int fileDesc, void *value1, void *value2) {
 
 		int blockCount;
 		CALL_OR_EXIT( BF_GetBlockCounter(fileDesc, &blockCount) );
+    blockCount -= 1;  //Not sure about that!
 
 		memcpy(&metaData[ROOT], &blockCount, 4);
+
+    
 	}
 	return AME_OK;
 }
