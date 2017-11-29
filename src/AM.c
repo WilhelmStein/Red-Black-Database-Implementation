@@ -27,21 +27,21 @@ scanData scanTable[MAXSCANS];
 #define POINTER      (5 + (int)metaData[ATTRLENGTH1]) //int
 
 //META BLOCK
-#define IDENTIFIER  (0)  //char
-#define ATTRTYPE1	  (1)  //char	
-#define ATTRLENGTH1 (2)  //int
-#define ATTRTYPE2	  (3)  //char
-#define ATTRLENGTH2 (4)  //int
-#define ROOT		    (5)  //int
-#define FILENAME	  (9)  //char*
+#define IDENTIFIER   (0)  //char
+#define ATTRTYPE1	 (1)  //char	
+#define ATTRLENGTH1  (2)  //int
+#define ATTRTYPE2	 (3)  //char
+#define ATTRLENGTH2  (4)  //int
+#define ROOT		 (5)  //int
+#define FILENAME	 (9)  //char*
  
 
 #define CALL_OR_EXIT(call)		\
 {                           	\
 	BF_ErrorCode code = call; 	\
 	if(code != BF_OK) {       	\
-		BF_PrintError(code);      \
-		exit( AME_ERROR );		    \
+		BF_PrintError(code);    \
+		exit( AME_ERROR );		\
 	}                         	\
 }
 
