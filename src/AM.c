@@ -13,18 +13,23 @@ scanData scanTable[MAXSCANS];
 #define BLACK ('B')
 #define RED   ('R')
 
+#define MAXRECORDS   ( (BF_BLOCK_SIZE - 9) /  ((int)metaData[ATTRLENGTH1] + (int)metaData[ATTRLENGTH2]) )
+#define RECORDSIZE   ( (int)metaData[ATTRLENGTH1] + (int)metaData[ATTRLENGTH2] )
+
 //RED BLOCKS
 //      IDENTIFIER   (0)  //char
 #define RECORDS      (1)  //int
-#define REDKEY(x)    ( /*FIRSTKEY*/5 + x * ( (int)metaData[ATTRLENGTH1] + (int)metaData[ATTRLENGTH2] ) )
-#define VALUE(x)     ( /*FIRSTVALUE*/(5 + (int)metaData[ATTRLENGTH1]) + x * ( (int)metaData[ATTRLENGTH2] + (int)metaData[ATTRLENGTH1] ) )
+#define PARENT       (5)  //int
+#define REDKEY(x)    ( /*FIRSTKEY*/9 + (x * RECORDSIZE) )
+#define VALUE(x)     ( /*FIRSTVALUE*/9 + (int)metaData[ATTRLENGTH1] + (x * RECORDSIZE) )
 
 //BLACK BLOCKS
 //      IDENTIFIER   (0) //char
 #define NUMKEYS      (1) //int
-#define FIRST        (5) //int
-#define BLACKKEY(x)  ( /*FIRSTKEY*/9 + x * ( 4 + (int)metaData[ATTRLENGTH1] ) )
-#define POINTER(x)   ( /*FIRSTPOINTER*/5 + x * ( 4 + (int)metaData[ATTRLENGTH1] ) )
+//      PARENT       (5) //int
+#define FIRST        (9) //int
+#define BLACKKEY(x)  ( /*FIRSTKEY*/13 + x * ( 4 + (int)metaData[ATTRLENGTH1] ) )
+#define POINTER(x)   ( /*FIRSTPOINTER*/9 + x * ( 4 + (int)metaData[ATTRLENGTH1] ) )
 
 //META BLOCK
 #define IDENTIFIER   (0)  //char
@@ -214,7 +219,8 @@ int AM_CloseIndex (int fileDesc)
 	return (AM_errno = (i > MAXOPENFILES ? AME_ERROR : AME_OK));
 }
 
-int AM_InsertEntry(int fileDesc, void *value1, void *value2) {
+int AM_InsertEntry(int fileDesc, void *value1, void *value2) 
+{
 	if (!isAM(fileDesc))
 		return (AM_errno = AME_ERROR);
 	
@@ -265,7 +271,53 @@ int AM_InsertEntry(int fileDesc, void *value1, void *value2) {
 		return (AM_errno = AME_OK);
 	}
   	else {
-		;
+		BF_Block *currentBlock;
+		BF_Block_Init(&currentBlock);
+		CALL_OR_EXIT( BF_GetBlock(fileDesc, (int)metaData[ROOT], currentBlock) );
+		char *data = BF_Block_GetData(currentBlock);
+
+		char keyType = metaData[ATTRTYPE1];
+		switch(keyType) {
+			
+			case 'i':
+				//while we are searching in index
+				while (data[IDENTIFIER] == BLACK) {
+
+					if ( *(int *)value1 < (int)data[BLACKKEY(0)] ) {
+						CALL_OR_EXIT( BF_GetBlock(fileDesc, (int)data[FIRST], currentBlock) );
+						data = BF_Block_GetData(currentBlock);
+						continue;
+					}
+
+					for (int i = 1; i < (int)data[NUMKEYS]; i++) {
+						if ( *(int *)value1 < (int)data[BLACKKEY(i)] ) {
+							CALL_OR_EXIT( BF_GetBlock(fileDesc, (int)data[POINTER(i)], currentBlock) );
+							data = BF_Block_GetData(currentBlock);
+							break;
+						}
+					}
+				}
+				//Check if there is enough space in red block
+				if ( (int)data[RECORDS] != MAXRECORDS) {
+				//If there is space
+					for (int i = 0; i < (int)data[RECORDS]; i++) {
+						if ( *(int *)value1 < (int)data[REDKEY(i)]) {
+							//Move all bigger keys-values to the right
+							memcpy( &data[REDKEY(i + 1)], &data[REDKEY(i)], RECORDSIZE * (int)data[RECORDS] );
+							//Push new record
+							memcpy( &data[REDKEY(i)], value1, (size_t)metaData[ATTRLENGTH1]);
+							memcpy( &data[VALUE(i)], value2, (size_t)metaData[ATTRLENGTH2]);
+							int records = (int)data[RECORDS] + 1;
+							memcpy( &data[RECORDS], records, 4);
+							break;
+						}
+					}
+				}
+				else {
+				//If there is no space split
+					
+				}
+		}
   	}
 
 
