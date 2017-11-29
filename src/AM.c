@@ -63,10 +63,10 @@ void AM_Init()
 }
 
 int AM_CreateIndex(char *fileName, 
-	               char attrType1, 
-	               int attrLength1, 
-	               char attrType2, 
-	               int attrLength2) 
+				   char attrType1, 
+				   int attrLength1, 
+				   char attrType2, 
+				   int attrLength2) 
 {
 	CALL_OR_EXIT(BF_CreateFile(fileName));
 
@@ -229,44 +229,44 @@ int AM_InsertEntry(int fileDesc, void *value1, void *value2) {
   //First Insert//
 	if(root == 0)
 	{
-    //Create new red block
+		//Create new red block
 		BF_Block *newRedBlock;
 		BF_Block_Init(&newRedBlock);
 		CALL_OR_EXIT( BF_AllocateBlock(fileDesc, newRedBlock) );
-    int redBlockCounter;
-    CALL_OR_EXIT( BF_GetBlockCounter(fileDesc, &redBlockCounter) );
-    CALL_OR_EXIT( BF_GetBlock(fileDesc, redBlockCounter, newRedBlock) );
+		int redBlockCounter;
+		CALL_OR_EXIT( BF_GetBlockCounter(fileDesc, &redBlockCounter) );
+		CALL_OR_EXIT( BF_GetBlock(fileDesc, redBlockCounter, newRedBlock) );
 		char *data = BF_Block_GetData(newRedBlock);
 
 		data[IDENTIFIER] = RED;
 
-    memcpy( &data[KEY], value1, (size_t)metaData[ATTRLENGTH1] );
-    memcpy( &data[VALUE], value2, (size_t)metaData[ATTRLENGTH2] );
-    int records = 1;
-    memcpy( &data[RECORDS], &records , 4);
+		memcpy( &data[KEY], value1, (size_t)metaData[ATTRLENGTH1] );
+		memcpy( &data[VALUE], value2, (size_t)metaData[ATTRLENGTH2] );
+		int records = 1;
+		memcpy( &data[RECORDS], &records , 4);
 
 
-    //Create new black block
-    BF_Block *newBlackBlock;
-    BF_Block_Init(&newBlackBlock);
-    CALL_OR_EXIT( BF_AllocateBlock(fileDesc, newBlackBlock) );
-    int blackBlockCounter;
-    CALL_OR_EXIT( BF_GetBlockCounter(fileDesc, &blackBlockCounter) );
-    CALL_OR_EXIT( BF_BF_GetBlock(fileDesc, blackBlockCounter, newBlackBlock) );
-    data = BF_Block_GetData(newBlackBlock);
+		//Create new black block
+		BF_Block *newBlackBlock;
+		BF_Block_Init(&newBlackBlock);
+		CALL_OR_EXIT( BF_AllocateBlock(fileDesc, newBlackBlock) );
+		int blackBlockCounter;
+		CALL_OR_EXIT( BF_GetBlockCounter(fileDesc, &blackBlockCounter) );
+		CALL_OR_EXIT( BF_BF_GetBlock(fileDesc, blackBlockCounter, newBlackBlock) );
+		data = BF_Block_GetData(newBlackBlock);
 
-    data[IDENTIFIER] = BLACK;
+		data[IDENTIFIER] = BLACK;
 
-    memcpy( &metaData[ROOT], &blackBlockCounter, 4 );
+		memcpy( &metaData[ROOT], &blackBlockCounter, 4 );
 
-    memcpy( &data[KEY], value1, (size_t)metaData[ATTRLENGTH1] );
-    memcpy( &data[POINTER], &blackBlockCounter, 4 );
+		memcpy( &data[KEY], value1, (size_t)metaData[ATTRLENGTH1] );
+		memcpy( &data[POINTER], &blackBlockCounter, 4 );
 
-    return (AM_errno = AME_OK);
+		return (AM_errno = AME_OK);
 	}
-  else {
-    ;
-  }
+  	else {
+		;
+  	}
 
 
 	return AME_OK;
