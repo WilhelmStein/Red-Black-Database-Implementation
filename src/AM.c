@@ -16,15 +16,15 @@ scanData scanTable[MAXSCANS];
 //RED BLOCKS
 //      IDENTIFIER   (0)  //char
 #define RECORDS      (1)  //int
-#define KEY          (5)  //arbitrary
-#define VALUE        (5 + (int)metaData[ATTRLENGTH1]) //arbitrary
+#define REDKEY(x)    ( /*FIRSTKEY*/5 + x * ( (int)metaData[ATTRLENGTH1] + (int)metaData[ATTRLENGTH2] ) )
+#define VALUE(x)     ( /*FIRSTVALUE*/(5 + (int)metaData[ATTRLENGTH1]) + x * ( (int)metaData[ATTRLENGTH2] + (int)metaData[ATTRLENGTH1] ) )
 
 //BLACK BLOCKS
 //      IDENTIFIER   (0) //char
 #define NUMKEYS      (1) //int
 #define FIRST        (5) //int
-#define KEY          (9) //arbitrary
-#define POINTER      (5 + (int)metaData[ATTRLENGTH1]) //int
+#define BLACKKEY(x)  ( /*FIRSTKEY*/9 + x * ( 4 + (int)metaData[ATTRLENGTH1] ) )
+#define POINTER(x)   ( /*FIRSTPOINTER*/5 + x * ( 4 + (int)metaData[ATTRLENGTH1] ) )
 
 //META BLOCK
 #define IDENTIFIER   (0)  //char
@@ -240,8 +240,8 @@ int AM_InsertEntry(int fileDesc, void *value1, void *value2) {
 
 		data[IDENTIFIER] = RED;
 
-		memcpy( &data[KEY], value1, (size_t)metaData[ATTRLENGTH1] );
-		memcpy( &data[VALUE], value2, (size_t)metaData[ATTRLENGTH2] );
+		memcpy( &data[REDKEY(0)], value1, (size_t)metaData[ATTRLENGTH1] );
+		memcpy( &data[VALUE(0)], value2, (size_t)metaData[ATTRLENGTH2] );
 		int records = 1;
 		memcpy( &data[RECORDS], &records , 4);
 
@@ -259,8 +259,8 @@ int AM_InsertEntry(int fileDesc, void *value1, void *value2) {
 
 		memcpy( &metaData[ROOT], &blackBlockCounter, 4 );
 
-		memcpy( &data[KEY], value1, (size_t)metaData[ATTRLENGTH1] );
-		memcpy( &data[POINTER], &blackBlockCounter, 4 );
+		memcpy( &data[BLACKKEY(0)], value1, (size_t)metaData[ATTRLENGTH1] );
+		memcpy( &data[POINTER(0)], &blackBlockCounter, 4 );
 
 		return (AM_errno = AME_OK);
 	}
