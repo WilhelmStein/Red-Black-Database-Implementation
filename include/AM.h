@@ -11,9 +11,16 @@ typedef enum { false , true } bool;
 
 extern int AM_errno;
 
-#define AME_OK 0
-#define AME_EOF -1
-#define AME_ERROR -2
+#define AME_OK                             0
+#define AME_EOF                           -1
+#define AME_ERROR                         -2
+#define AME_NOT_AM_FILE                   -3
+#define AME_DESTROY_FAILED_REMOVE         -4
+#define AME_DESTROY_FAILED_OPEN           -5
+#define AME_OPEN_FAILED                   -6
+#define AME_CLOSE_FAILED_SCANS            -7
+#define AME_CLOSE_FAILED_UNOPENED         -8
+#define AME_INSERT_FAILED                 -9
 
 /* File Types */
 

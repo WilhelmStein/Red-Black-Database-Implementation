@@ -151,14 +151,14 @@ int AM_DestroyIndex(char *fileName)
 		CALL_OR_EXIT(BF_OpenFile(fileName, &fileDesc));
 
 		if (!isAM(fileDesc))
-			return (AM_errno = AME_ERROR);
+			return (AM_errno = AME_NOT_AM_FILE);
 
 		CALL_OR_EXIT(BF_CloseFile(fileDesc));
 
-		return (AM_errno = (!remove(fileName) ? AME_OK : AME_ERROR));
+		return (AM_errno = (!remove(fileName) ? AME_OK : AME_DESTROY_FAILED_REMOVE));
 	}
 
-	return (AM_errno = AME_ERROR);
+	return (AM_errno = AME_DESTROY_FAILED_OPEN);
 }
 
 int AM_OpenIndex (char *fileName)
@@ -167,7 +167,7 @@ int AM_OpenIndex (char *fileName)
 	CALL_OR_EXIT(BF_OpenFile(fileName, &fileDesc));
 
 	if (!isAM(fileDesc))
-		return (AM_errno = AME_ERROR);
+		return (AM_errno = AME_NOT_AM_FILE);
 
 	AM_errno = AME_OK;
 	
@@ -184,18 +184,18 @@ int AM_OpenIndex (char *fileName)
 		}
 	}
 
-	return (i < MAXOPENFILES ? i : (AM_errno = AME_ERROR));
+	return (i < MAXOPENFILES ? i : (AM_errno = AME_OPEN_FAILED));
 }
 
 int AM_CloseIndex (int fileDesc)
 {
 	if (!isAM(fileDesc))
-		return (AM_errno = AME_ERROR);
+		return (AM_errno = AME_NOT_AM_FILE);
 
 	int i;
 	for (i = 0; i < MAXSCANS; i++)
 		if (fileDesc == scanTable[i].fileDesc)
-			return (AM_errno = AME_ERROR);
+			return (AM_errno = AME_CLOSE_FAILED_SCANS);
 
 	for (i = 0; i < MAXOPENFILES; i++)
 	{
@@ -211,12 +211,12 @@ int AM_CloseIndex (int fileDesc)
 		}
 	}
 
-	return (AM_errno = (i > MAXOPENFILES ? AME_ERROR : AME_OK));
+	return (AM_errno = (i > MAXOPENFILES ? AME_CLOSE_FAILED_UNOPENED : AME_OK));
 }
 
 int AM_InsertEntry(int fileDesc, void *value1, void *value2) {
 	if (!isAM(fileDesc))
-		return (AM_errno = AME_ERROR);
+		return (AM_errno = AME_NOT_AM_FILE);
 	
 	BF_Block *metaBlock;
 	BF_Block_Init(&metaBlock);
@@ -252,7 +252,7 @@ int AM_InsertEntry(int fileDesc, void *value1, void *value2) {
 		CALL_OR_EXIT( BF_AllocateBlock(fileDesc, newBlackBlock) );
 		int blackBlockCounter;
 		CALL_OR_EXIT( BF_GetBlockCounter(fileDesc, &blackBlockCounter) );
-		CALL_OR_EXIT( BF_BF_GetBlock(fileDesc, blackBlockCounter, newBlackBlock) );
+		CALL_OR_EXIT( BF_GetBlock(fileDesc, blackBlockCounter, newBlackBlock) );
 		data = BF_Block_GetData(newBlackBlock);
 
 		data[IDENTIFIER] = BLACK;
@@ -275,7 +275,7 @@ int AM_InsertEntry(int fileDesc, void *value1, void *value2) {
 int AM_OpenIndexScan(int fileDesc, int op, void *value)
 {
 	if (!isAM(fileDesc))
-		return (AM_errno = AME_ERROR);
+		return (AM_errno = AME_NOT_AM_FILE);
 
 	return AME_OK;
 }
@@ -292,14 +292,21 @@ int AM_CloseIndexScan(int scanDesc)
 
 static char * errorMessage[] =
 {
-	[AME_OK		* (-1)]	"Success...\n",
-	[AME_EOF	* (-1)]	"Reached end of file...\n",
-	[AME_ERROR	* (-1)] "General error message...\n"
+	[AME_OK							* (-1)]	"<Message>: Successful operation",
+	[AME_EOF						* (-1)]	"<Message>: End of file reached",
+	[AME_ERROR						* (-1)] "<Error>: Unexpected error occured",
+	[AME_NOT_AM_FILE				* (-1)] "<Invalid Operation>: Attempting to open a file of unknown format",
+	[AME_DESTROY_FAILED_REMOVE		* (-1)]	"<Invalid Operation>: Attempting to remove unexistent file",
+	[AME_DESTROY_FAILED_OPEN        * (-1)] "<Invalid Operation>: Attempting to destroy an open file",
+	[AME_OPEN_FAILED				* (-1)] "<Error>: Open File limit reached",
+	[AME_CLOSE_FAILED_SCANS			* (-1)]	"<Invalid Operation>: Attempting to close a file that is currently being scanned",
+	[AME_CLOSE_FAILED_UNOPENED      * (-1)] "<Invalid Operation>: Attempting to close unopened file",
+	[AME_INSERT_FAILED				* (-1)] "<Error>: Failed to insert new entry"
 };
 
 void AM_PrintError(char *errString)
 {
-	printf("%s%s", errString, errorMessage[AM_errno * (-1)]);
+	fprintf(stderr, "%s%s\n", errString, errorMessage[AM_errno * (-1)]);
 }
 
 void AM_Close()
