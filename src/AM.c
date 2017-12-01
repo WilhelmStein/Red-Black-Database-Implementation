@@ -219,6 +219,92 @@ int AM_CloseIndex (int fileDesc)
 	return (AM_errno = (i > MAXOPENFILES ? AME_CLOSE_FAILED_UNOPENED : AME_OK));
 }
 
+static void printBlack(const int i, const char *blackData, const char *metaData)
+{
+	switch(metaData[(int)ATTRTYPE1])
+	{
+		case 'i':
+			printf("  %d  |%d|", (int)blackData[(int)BLACKKEY(i, metaData)], (int)blackData[(int)POINTER(i + 1, metaData)]);
+			break;
+		case 'f':
+			printf("  %f  |%d|", (float)blackData[(int)BLACKKEY(i, metaData)], (int)blackData[(int)POINTER(i + 1, metaData)]);
+			break;
+		case 'c':
+			printf("  %s  |%d|", blackData[(int)BLACKKEY(i, metaData)], (int)blackData[(int)POINTER(i + 1, metaData)]);
+			break;
+	}
+}
+
+static void printRed(const int i, char *redData, char *metaData)
+{
+	switch(metaData[(int)ATTRTYPE1])
+	{
+		case 'i':
+			printf("%d :", (int)redData[(int)REDKEY(i, metaData)]);
+			break;
+		case 'f':
+			printf("%f :", (float)redData[(int)REDKEY(i, metaData)]);
+			break;
+		case 'c':
+			printf("%s : ", redData[(int)REDKEY(i, metaData)]);
+			break;
+	}
+
+	switch(metaData[(int)ATTRTYPE2])
+	{
+		case 'i':
+			printf("%d", (int)redData[(int)VALUE(i, metaData)]);
+			break;
+		case 'f':
+			printf("%f", (float)redData[(int)VALUE(i, metaData)]);
+			break;
+		case 'c':
+			printf("%s", redData[(int)VALUE(i, metaData)]);
+			break;
+	}
+}
+
+static void printRec(const int fd, const int blockIndex, const char *metaData)
+{
+	BF_Block *parentBlock;
+	BF_Block_Init(&parentBlock);
+	CALL_OR_EXIT( BF_GetBlock(fd, blockIndex, parentBlock) );
+	char *parentData = BF_Block_GetData(parentBlock);
+
+	if(parentData[IDENTIFIER] == BLACK)
+	{
+		printf("Block Id: %d\nType: Black\nContents: |%d|", blockIndex, (int)parentData[(int)POINTER(0, metaData)]);
+		for(int i = 0; i < parentData[NUMKEYS]; i++)
+			printBlack(i, parentData, metaData);
+		printf("\n");
+		for(int i = 0; i < (int)parentData[NUMKEYS]; i++) {
+			int child = (int)parentData[(int)POINTER(i, metaData)];
+			CALL_OR_EXIT( BF_UnpinBlock(parentBlock) );
+			printRec(fd, child, metaData);
+			CALL_OR_EXIT( BF_GetBlock(fd, blockIndex, parentBlock) );
+		}
+	}
+	else
+	{
+		printf("Block Id: %d\nType: Red\nContents: ", blockIndex);
+		for(int i = 0; i < parentData[RECORDS]; i++)
+			printRed(i, parentData, metaData);
+		printf("\n");
+	}
+	CALL_OR_EXIT( BF_UnpinBlock(parentBlock) );
+}
+
+static void debugPrint(const int fd)
+{
+	BF_Block *metaBlock;
+	BF_Block_Init(&metaBlock);
+	CALL_OR_EXIT( BF_GetBlock(fd, 0, metaBlock) );
+	char *metaData = BF_Block_GetData(metaBlock);
+	int root = (int)metaData[ROOT];
+	printRec(fd, root, metaData);
+	CALL_OR_EXIT( BF_UnpinBlock(metaData) );
+}
+
 static bool less(void *value1, void *value2, char attrType1) 
 {
 	switch(attrType1) {
