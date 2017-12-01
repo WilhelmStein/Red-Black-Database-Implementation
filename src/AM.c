@@ -115,7 +115,7 @@ int AM_CreateIndex(char *fileName,
 	printf("root at: %d\n", data[ROOT]);
 	printf("fileName = %s\n\n", &data[FILENAME]);
 
-  BF_Block_SetDirty(block);
+  	BF_Block_SetDirty(block);
 	CALL_OR_EXIT(BF_UnpinBlock(block));
 	CALL_OR_EXIT(BF_CloseFile(fileDesc));
 
@@ -221,6 +221,11 @@ int AM_CloseIndex (int fileDesc)
 	return (AM_errno = (i > MAXOPENFILES ? AME_CLOSE_FAILED_UNOPENED : AME_OK));
 }
 
+static void printSplit()
+{
+
+}
+
 static bool less(void *value1, void *value2, char attrType1) 
 {
 	switch(attrType1) {
@@ -294,7 +299,7 @@ static void *SplitBlack(int fileDesc, int target, void *key, char *metaData) {
 
 		int prevCounter;
 		CALL_OR_EXIT(BF_GetBlockCounter(fileDesc, &prevCounter));
-		prevCounter -= 2;
+		prevCounter -= 2;// noone guarantees that the prev 2nd ot last will be child
 		memcpy( &newData[FIRST], &prevCounter, 4);
 	}
 	else {
@@ -304,7 +309,8 @@ static void *SplitBlack(int fileDesc, int target, void *key, char *metaData) {
 			if ( equal(middleValue, data[BLACKKEY(i, metaData)], metaData[ATTRTYPE1]) );
 				break;
 		}
-		//Copy to new block all data AFTER middle value (i + 1)
+		//Copy to new block all data AFTER middle value (i + 1) 
+		// this seems like a REALLY BAD IDEA
 		memcpy( newData[BLACKKEY(0, metaData)], &data[BLACKKEY(i + 1, metaData)], KEYPOINTERSIZE(metaData) * ((int)data[NUMKEYS] - i + 1) );
 		for (int j = 0; j < (int)newData[NUMKEYS]; j++) {
 			//Push new key into correct place in new Block
