@@ -275,7 +275,7 @@ int AM_CloseIndex (int fileDesc)
 	return (AM_errno = (i > MAXOPENFILES ? AME_CLOSE_FAILED_UNOPENED : AME_OK));
 }
 
-static void printBlack(const int i, const char *blackData, const char *metaData)
+static void printBlack(const int i, char * const blackData, char * const metaData)
 {
 	switch(metaData[(int)ATTRTYPE1])
 	{
@@ -286,12 +286,12 @@ static void printBlack(const int i, const char *blackData, const char *metaData)
 			printf("  %f  |%d|", (float)blackData[(int)BLACKKEY(i, metaData)], (int)blackData[(int)POINTER(i + 1, metaData)]);
 			break;
 		case 'c':
-			printf("  %s  |%d|", blackData[(int)BLACKKEY(i, metaData)], (int)blackData[(int)POINTER(i + 1, metaData)]);
+			printf("  %s  |%d|", &blackData[(int)BLACKKEY(i, metaData)], (int)blackData[(int)POINTER(i + 1, metaData)]);
 			break;
 	}
 }
 
-static void printRed(const int i, char *redData, char *metaData)
+static void printRed(const int i, char * const redData, char * const metaData)
 {
 	switch(metaData[(int)ATTRTYPE1])
 	{
@@ -302,7 +302,7 @@ static void printRed(const int i, char *redData, char *metaData)
 			printf("%f :", (float)redData[(int)REDKEY(i, metaData)]);
 			break;
 		case 'c':
-			printf("%s : ", redData[(int)REDKEY(i, metaData)]);
+			printf("%s : ", &redData[(int)REDKEY(i, metaData)]);
 			break;
 	}
 
@@ -315,12 +315,12 @@ static void printRed(const int i, char *redData, char *metaData)
 			printf("%f", (float)redData[(int)VALUE(i, metaData)]);
 			break;
 		case 'c':
-			printf("%s", redData[(int)VALUE(i, metaData)]);
+			printf("%s", &redData[(int)VALUE(i, metaData)]);
 			break;
 	}
 }
 
-static void printRec(const int fd, const int blockIndex, const char *metaData)
+static void printRec(const int fd, const int blockIndex, char * const metaData)
 {
 	BF_Block *parentBlock;
 	BF_Block_Init(&parentBlock);
@@ -358,7 +358,7 @@ static void debugPrint(const int fd)
 	char *metaData = BF_Block_GetData(metaBlock);
 	int root = (int)metaData[ROOT];
 	printRec(fd, root, metaData);
-	CALL_OR_EXIT( BF_UnpinBlock(metaData) );
+	CALL_OR_EXIT( BF_UnpinBlock(metaBlock) );
 }
   
 static void *SplitBlack(int fileDesc, int target, void *key, char *metaData) 
@@ -880,7 +880,7 @@ static char * errorMessage[] =
 	[AME_INSERT_FAILED              * (-1)] "<Error>: Failed to insert new entry",
 	[AME_SCAN_FAILED_LIMIT          * (-1)] "<Error>: Scan limit reached",
 	[AME_SCAN_FAILED_UNOPENED       * (-1)] "<Invalid Operation>: Attempting to scan unopened file",
-	[AME_CLOSE_SCAN_NON_EXISTENT    * (-1)] "<Invalid Operation>: Attempting to terminate non-existent scanning"
+	[AME_CLOSE_SCAN_NON_EXISTENT    * (-1)] "<Invalid Operation>: Attempting to terminate non-existent scanning",
 	[AME_CREATE_FAILED              * (-1)] "<Error>: Creation requirements not met"
 };
 
