@@ -45,7 +45,9 @@ extern fileData fileTable[MAXOPENFILES];
 typedef struct _scanData
 {
   int fileDesc, blockIndex, recordIndex;
+  int op;
   void * value;
+  void * returnValue;
 } scanData;
 
 extern scanData scanTable[MAXSCANS];
