@@ -750,43 +750,43 @@ int AM_InsertEntry(int fileDesc, void *value1, void *value2)
 
 static void search(int fileDesc, int attrLength1, char type, int root, void * value, int * const b, int * const r)
 {
-	BF_Block * block;
+	// BF_Block * block;
 
-	BF_Block_Init(&block);
-	CALL_OR_DIE(BF_GetBlock(fileDesc, root, block));
+	// BF_Block_Init(&block);
+	// CALL_OR_DIE(BF_GetBlock(fileDesc, root, block));
 
-	char * data = BF_Block_GetData(block);
+	// char * data = BF_Block_GetData(block);
 
-	if (data[IDENTIFIER] == BLACK)
-	{
-		for (unsigned i = 0; i < (int) data[NUMKEYS]; i++)
-		{
-			void * key = data[BLACKKEY(i, metaData)];
-			if(compare(value, key, LESS, type)
-				break;
-		}
+	// if (data[IDENTIFIER] == BLACK)
+	// {
+	// 	for (unsigned i = 0; i < (int) data[NUMKEYS]; i++)
+	// 	{
+	// 		void * key = data[BLACKKEY(i, metaData)];
+	// 		if(compare(value, key, LESS, type)
+	// 			break;
+	// 	}
 
-		CALL_OR_DIE(BF_UnpinBlock(block));
-		BF_Block_Destroy(&block);
+	// 	CALL_OR_DIE(BF_UnpinBlock(block));
+	// 	BF_Block_Destroy(&block);
 
-		int _root = 9 + i * ( 4 + attrLength1 );
-		search(fileDesc, attrLength1, type, _root, value, b, r);
-	}
-	else
-	{
-		for (unsigned i = 0; i < (int) data[RECORDS]; i++)
-		{
-			void * key = data[REDKEY(i, metaData)];
-			if(compare(value, key, GREATER_THAN_OR_EQUAL, type)
-				break;
-		}
+	// 	int _root = 9 + i * ( 4 + attrLength1 );
+	// 	search(fileDesc, attrLength1, type, _root, value, b, r);
+	// }
+	// else
+	// {
+	// 	for (unsigned i = 0; i < (int) data[RECORDS]; i++)
+	// 	{
+	// 		void * key = data[REDKEY(i, metaData)];
+	// 		if(compare(value, key, GREATER_THAN_OR_EQUAL, type)
+	// 			break;
+	// 	}
 		
-		CALL_OR_DIE(BF_UnpinBlock(block));
-		BF_Block_Destroy(&block);
+	// 	CALL_OR_DIE(BF_UnpinBlock(block));
+	// 	BF_Block_Destroy(&block);
 
-		*b = root;
-		*r = i;
-	}
+	// 	*b = root;
+	// 	*r = i;
+	// }
 }
 
 int AM_OpenIndexScan(int fileDesc, int op, void *value)
@@ -811,7 +811,7 @@ int AM_OpenIndexScan(int fileDesc, int op, void *value)
 			BF_Block * metaBlock;
 
 			BF_Block_Init(&metaBlock);
-			CALL_OR_DIE(BF_GetBlock(fileDesc, 0, metaBlock));
+			CALL_OR_EXIT(BF_GetBlock(fileDesc, 0, metaBlock));
 			
 			char * metaData = BF_Block_GetData(metaBlock);
 
