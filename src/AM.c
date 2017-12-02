@@ -364,7 +364,7 @@ static void debugPrint(const int fd)
 	char *metaData = BF_Block_GetData(metaBlock);
 	int root = (int)metaData[ROOT];
 	printRec(fd, root, metaData);
-	CALL_OR_EXIT( BF_UnpinBlock(metaData) );
+	CALL_OR_EXIT( BF_UnpinBlock(metaBlock) );
 	BF_Block_Destroy(&metaBlock);
 }
   
