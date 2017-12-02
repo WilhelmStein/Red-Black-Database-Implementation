@@ -603,18 +603,21 @@ void *AM_FindNextEntry(int scanDesc)
 
 int AM_CloseIndexScan(int scanDesc)
 {
-	if (!isAM(fileDesc))
-		return (AM_errno = AME_NOT_AM_FILE);
-
+	if (scanDesc < 0 || scanDesc >= MAXSCANS)
+		return (AM_errno = AME_CLOSE_SCAN_NON_EXISTENT);
+	
 	if (scanTable[scanDesc].fileDesc == UNDEFINED)
 		return (AM_errno = AME_CLOSE_SCAN_NON_EXISTENT);
 
-	scanTable[i].fileDesc    = UNDEFINED;
-	scanTable[i].blockIndex  = UNDEFINED;
-	scanTable[i].recordIndex = UNDEFINED;
+	if (!isAM(scanTable[scanDesc].fileDesc))
+		return (AM_errno = AME_NOT_AM_FILE);
+		
+	scanTable[scanDesc].fileDesc    = UNDEFINED;
+	scanTable[scanDesc].blockIndex  = UNDEFINED;
+	scanTable[scanDesc].recordIndex = UNDEFINED;
 
-	free(scanTable[i].value);
-	scanTable[i].value       = NULL;
+	free(scanTable[scanDesc].value);
+	scanTable[scanDesc].value       = NULL;
 
 	return (AM_errno = AME_OK);
 }
@@ -633,7 +636,7 @@ static char * errorMessage[] =
 	[AME_INSERT_FAILED              * (-1)] "<Error>: Failed to insert new entry",
 	[AME_SCAN_FAILED_LIMIT          * (-1)] "<Error>: Scan limit reached",
 	[AME_SCAN_FAILED_UNOPENED       * (-1)] "<Invalid Operation>: Attempting to scan unopened file",
-	[AME_CLOSE_SCAN_NON_EXISTENT    * (-1)] "<Invalid Operation>: Attempting to terminate non-existent scanning"
+	[AME_CLOSE_SCAN_NON_EXISTENT    * (-1)] "<Invalid Operation>: Attempting to terminate non-existent scan"
 	[AME_CREATE_FAILED              * (-1)] "<Error>: Creation requirements not met"
 };
 
