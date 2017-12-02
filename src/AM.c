@@ -640,11 +640,12 @@ void *AM_FindNextEntry(int scanDesc)
 			scanTable[scanDesc].blockIndex = j;
 			break;
 		}
-		if ( ( j = (int)currentData[NEXT] ) == -1 )
+		if ( ( j = (int)currentData[NEXT] ) != -1 )
 		{
 			CALL_OR_EXIT( BF_UnpinBlock(currentBlock) );
 			CALL_OR_EXIT( BF_GetBlock(scanTable[scanDesc].fileDesc, j, currentBlock) );
 			currentData = BF_Block_GetData(currentBlock);
+			break;
 		}
 	}
 	if(!found)
