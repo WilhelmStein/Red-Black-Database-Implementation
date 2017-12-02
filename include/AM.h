@@ -17,10 +17,14 @@ extern int AM_errno;
 #define AME_NOT_AM_FILE                   -3
 #define AME_DESTROY_FAILED_REMOVE         -4
 #define AME_DESTROY_FAILED_OPEN           -5
-#define AME_OPEN_FAILED                   -6
+#define AME_OPEN_FAILED_LIMIT             -6
 #define AME_CLOSE_FAILED_SCANS            -7
 #define AME_CLOSE_FAILED_UNOPENED         -8
 #define AME_INSERT_FAILED                 -9
+#define AME_SCAN_FAILED_LIMIT             -10
+#define AME_SCAN_FAILED_UNOPENED          -11
+#define AME_CLOSE_SCAN_NON_EXISTENT       -12
+#define AME_CREATE_FAILED                 -13
 
 /* File Types */
 
@@ -40,8 +44,8 @@ extern fileData fileTable[MAXOPENFILES];
 
 typedef struct _scanData
 {
-  int fileDesc;
-  void * recordKey;
+  int fileDesc, blockIndex, recordIndex;
+  void * value;
 } scanData;
 
 extern scanData scanTable[MAXSCANS];
