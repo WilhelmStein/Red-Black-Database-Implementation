@@ -236,7 +236,7 @@ int AM_OpenIndex (char *fileName)
 		}
 	}
 
-	return (i < MAXOPENFILES ? i : (AM_errno = AME_OPEN_FAILED));
+	return (i < MAXOPENFILES ? i : (AM_errno = AME_OPEN_FAILED_LIMIT));
 }
 
 int AM_CloseIndex (int fileDesc)
