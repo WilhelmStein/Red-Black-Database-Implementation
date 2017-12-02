@@ -20,7 +20,7 @@ scanData scanTable[MAXSCANS];
 //      IDENTIFIER   (0)  //char
 #define RECORDS      (1)  //int
 #define PARENT       (5)  //int
-#define REDKEY(x)    ( /*FIRSTKEY*/9 + (x * RECORDSIZE(metaData)) )
+#define REDKEY(x, metaData)    ( /*FIRSTKEY*/9 + (x * RECORDSIZE(metaData)) )
 #define VALUE(x, metaData)     ( /*FIRSTVALUE*/9 + (int)metaData[ATTRLENGTH1] + (x * RECORDSIZE(metaData)) )
 
 //BLACK BLOCKS
@@ -40,6 +40,50 @@ scanData scanTable[MAXSCANS];
 #define ROOT		 (5)  //int
 #define FILENAME	 (9)  //char*
  
+static bool less(void *value1, void *value2, char attrType1) 
+{
+	switch(attrType1) {
+		case 'i':
+			return *(int *)value1 < *(int *)value2;
+		case 'f':
+			return *(float *)value1 < *(float *)value2;
+		case 'c':
+			return strcmp( (char *)value1, (char *)value2 ) < 0;
+		default: break;
+	}
+}
+
+static bool equal(void *value1, void *value2, char attrType1) 
+{
+	switch(attrType1) {
+		case 'i':
+			return *(int *)value1 == *(int *)value2;
+		case 'f':
+			return *(float *)value1 == *(float *)value2;
+		case 'c':
+			return !strcmp( (char *)value1, (char *)value2 );
+		default: break;
+	}
+}
+
+static bool compare(void *valueA, void *valueB, int op, char type)
+{
+	switch (op)
+	{
+		case EQUAL:
+			return equal(valueA, valueB, type);
+		case NOT_EQUAL:
+			return !equal(valueA, valueB, type);
+		case LESS_THAN:
+			return less(valueA, valueB, type);
+		case GREATER_THAN:
+			return (!less(valueA, valueB, type) && !equal(valueA, valueB, type));
+		case LESS_THAN_OR_EQUAL:
+			return (less(valueA, valueB, type) || equal(valueA, valueB, type));
+		case GREATER_THAN_OR_EQUAL:
+			return !less(valueA, valueB, type);
+	}
+}
 
 #define CALL_OR_EXIT(call)		\
 {                           	\
@@ -52,16 +96,19 @@ scanData scanTable[MAXSCANS];
 
 void AM_Init()
 {
-	for (unsigned i = 0; i < MAXOPENFILES; i++)
+	unsigned i;
+	for (i = 0; i < MAXOPENFILES; i++)
 	{
 		fileTable[i].fileDesc = UNDEFINED;
 		fileTable[i].fileName = NULL;
 	}
 
-	for (unsigned i = 0; i < MAXSCANS; i++)
+	for (i = 0; i < MAXSCANS; i++)
 	{
-		scanTable[i].fileDesc = UNDEFINED;
-		scanTable[i].recordKey = NULL;
+		scanTable[i].fileDesc    = UNDEFINED;
+		scanTable[i].blockIndex  = UNDEFINED;
+		scanTable[i].recordIndex = UNDEFINED;
+		scanTable[i].value       = NULL;
 	}
 
 	CALL_OR_EXIT(BF_Init(LRU));
@@ -305,19 +352,6 @@ static void debugPrint(const int fd)
 	CALL_OR_EXIT( BF_UnpinBlock(metaData) );
 }
 
-static bool less(void *value1, void *value2, char attrType1) 
-{
-	switch(attrType1) {
-		case 'i':
-			return *(int *)value1 < *(int *)value2;
-		case 'f':
-			return *(float *)value1 < *(float *)value2;
-		case 'c':
-			return strcmp( (char *)value1, (char *)value2 ) < 0;
-		default: break;
-	}
-}
-
 static int SplitBlack(int fileDesc, int target, void *key, char *metaData) {
 
 }
@@ -467,12 +501,99 @@ int AM_InsertEntry(int fileDesc, void *value1, void *value2)
 	return AME_OK;
 }
 
+static void search(int fileDesc, int attrLength1, char type, int root, void * value, int * const b, int * const r)
+{
+	BF_Block * block;
+
+	BF_Block_Init(&block);
+	CALL_OR_DIE(BF_GetBlock(fileDesc, root, block));
+
+	char * data = BF_Block_GetData(block);
+
+	if (data[IDENTIFIER] == BLACK)
+	{
+		for (unsigned i = 0; i < (int) data[NUMKEYS]; i++)
+		{
+			void * key = data[BLACKKEY(i, metaData)];
+			if(compare(value, key, LESS, type)
+				break;
+		}
+
+		CALL_OR_DIE(BF_UnpinBlock(block));
+		BF_Block_Destroy(&block);
+
+		int _root = 9 + i * ( 4 + attrLength1 );
+		search(fileDesc, attrLength1, type, _root, value, b, r);
+	}
+	else
+	{
+		for (unsigned i = 0; i < (int) data[RECORDS]; i++)
+		{
+			void * key = data[REDKEY(i, metaData)];
+			if(compare(value, key, GREATER_THAN_OR_EQUAL, type)
+				break;
+		}
+		
+		CALL_OR_DIE(BF_UnpinBlock(block));
+		BF_Block_Destroy(&block);
+
+		*b = root;
+		*r = i;
+	}
+}
+
 int AM_OpenIndexScan(int fileDesc, int op, void *value)
 {
 	if (!isAM(fileDesc))
 		return (AM_errno = AME_NOT_AM_FILE);
 
-	return AME_OK;
+	AM_errno = AME_OK;
+
+	unsigned i;
+	for (i = 0; i < MAXOPENFILES; i++)
+		if (fileTable[i].fileDesc == fileDesc)
+			break;
+
+	if (i == MAXOPENFILES)
+		return (AM_errno = AME_SCAN_FAILED_UNOPENED);
+
+	for (i = 0; i < MAXSCANS; i++)
+	{
+		if (scanTable[i].fileDesc == UNDEFINED)
+		{
+			BF_Block * metaBlock;
+
+			BF_Block_Init(&metaBlock);
+			CALL_OR_DIE(BF_GetBlock(fileDesc, 0, metaBlock));
+			
+			char * metaData = BF_Block_GetData(metaBlock);
+
+			const int attrLength1 = (int)  metaData[ATTRLENGTH1];
+			const char type       = (char) metaData[IDENTIFIER];
+			const int root        = (int)  metaData[ROOT];
+
+			CALL_OR_DIE(BF_UnpinBlock(metaBlock));
+			BF_Block_Destroy(&metaBlock);
+
+			int b, r;
+			search(fileDesc, attrLength1, type, root, value, &b, &r);
+
+			scanTable[i].fileDesc = fileDesc;
+			scanTable[i].blockIndex = b;
+			scanTable[i].recordIndex = r;
+
+			// Remember to free this shiet !!!
+			scanTable[i].value = malloc(attrLength1);
+			memcpy(scanTable[i].value, value, attrLength1);
+
+			break;
+		}
+	}
+
+	if (i == MAXSCANS)
+		return (AM_errno = AME_SCAN_FAILED_LIMIT);
+
+	return i;
 }
 
 void *AM_FindNextEntry(int scanDesc)
@@ -482,21 +603,38 @@ void *AM_FindNextEntry(int scanDesc)
 
 int AM_CloseIndexScan(int scanDesc)
 {
-  return AME_OK;
+	if (!isAM(fileDesc))
+		return (AM_errno = AME_NOT_AM_FILE);
+
+	if (scanTable[scanDesc].fileDesc == UNDEFINED)
+		return (AM_errno = AME_CLOSE_SCAN_NON_EXISTENT);
+
+	scanTable[i].fileDesc    = UNDEFINED;
+	scanTable[i].blockIndex  = UNDEFINED;
+	scanTable[i].recordIndex = UNDEFINED;
+
+	free(scanTable[i].value);
+	scanTable[i].value       = NULL;
+
+	return (AM_errno = AME_OK);
 }
 
 static char * errorMessage[] =
 {
-	[AME_OK							* (-1)]	"<Message>: Successful operation",
-	[AME_EOF						* (-1)]	"<Message>: End of file reached",
-	[AME_ERROR						* (-1)] "<Error>: Unexpected error occured",
-	[AME_NOT_AM_FILE				* (-1)] "<Invalid Operation>: Attempting to open a file of unknown format",
-	[AME_DESTROY_FAILED_REMOVE		* (-1)]	"<Invalid Operation>: Attempting to remove unexistent file",
+	[AME_OK                         * (-1)]	"<Message>: Successful operation",
+	[AME_EOF                        * (-1)]	"<Message>: End of file reached",
+	[AME_ERROR                      * (-1)] "<Error>: Unexpected error occured",
+	[AME_NOT_AM_FILE                * (-1)] "<Invalid Operation>: Attempting to open a file of unknown format",
+	[AME_DESTROY_FAILED_REMOVE      * (-1)]	"<Invalid Operation>: Attempting to remove unexistent file",
 	[AME_DESTROY_FAILED_OPEN        * (-1)] "<Invalid Operation>: Attempting to destroy an open file",
-	[AME_OPEN_FAILED				* (-1)] "<Error>: Open File limit reached",
-	[AME_CLOSE_FAILED_SCANS			* (-1)]	"<Invalid Operation>: Attempting to close a file that is currently being scanned",
+	[AME_OPEN_FAILED_LIMIT          * (-1)] "<Error>: Open File limit reached",
+	[AME_CLOSE_FAILED_SCANS         * (-1)]	"<Invalid Operation>: Attempting to close a file that is currently being scanned",
 	[AME_CLOSE_FAILED_UNOPENED      * (-1)] "<Invalid Operation>: Attempting to close unopened file",
-	[AME_INSERT_FAILED				* (-1)] "<Error>: Failed to insert new entry"
+	[AME_INSERT_FAILED              * (-1)] "<Error>: Failed to insert new entry",
+	[AME_SCAN_FAILED_LIMIT          * (-1)] "<Error>: Scan limit reached",
+	[AME_SCAN_FAILED_UNOPENED       * (-1)] "<Invalid Operation>: Attempting to scan unopened file",
+	[AME_CLOSE_SCAN_NON_EXISTENT    * (-1)] "<Invalid Operation>: Attempting to terminate non-existent scanning"
+	[AME_CREATE_FAILED              * (-1)] "<Error>: Creation requirements not met"
 };
 
 void AM_PrintError(char *errString)
@@ -506,13 +644,14 @@ void AM_PrintError(char *errString)
 
 void AM_Close()
 {
-	for (unsigned i = 0; i < MAXOPENFILES; i++)
+	unsigned i;
+	for (i = 0; i < MAXOPENFILES; i++)
 		if (fileTable[i].fileName != NULL)
 			free(fileTable[i].fileName);
 
-	for (unsigned i = 0; i < MAXSCANS; i++)
-		if (scanTable[i].recordKey != NULL)
-			free(scanTable[i].recordKey);
+	for (i = 0; i < MAXSCANS; i++)
+		if (scanTable[i].value != NULL)
+				free(scanTable[i].value);
 
 	CALL_OR_EXIT(BF_Close());
 }
