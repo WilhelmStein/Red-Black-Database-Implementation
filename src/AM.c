@@ -360,7 +360,7 @@ static void debugPrint(const int fd)
 	char *metaData = BF_Block_GetData(metaBlock);
 	int root = (int)metaData[ROOT];
 	printRec(fd, root, metaData);
-	CALL_OR_EXIT( BF_UnpinBlock(metaData) );
+	CALL_OR_EXIT( BF_UnpinBlock(metaBlock) );
 	BF_Block_Destroy(&metaBlock);
 }
   
@@ -874,7 +874,7 @@ void *AM_FindNextEntry(int scanDesc)
 	int j = scanTable[scanDesc].blockIndex;
 	while(true) {
 		for(int i = scanTable[scanDesc].recordIndex; i < (int)currentData[RECORDS]; i++) {
-			if(compare( (void *)currentData[(int)REDKEY(i ,metaData)], scanTable[scanDesc].value, scanTable[scanDesc].op, metaData[ATTRTYPE1]))
+			if(compare( (void *) &currentData[(int)REDKEY(i ,metaData)], scanTable[scanDesc].value, scanTable[scanDesc].op, metaData[ATTRTYPE1]))
 			{
 				memcpy(&(scanTable[scanDesc].returnValue), &(currentData[(int)VALUE(i ,metaData)]), (int)metaData[ATTRLENGTH2]);
 				( (i + 1) == (int)currentData[RECORDS] ) ? (scanTable[scanDesc].recordIndex = 0) : (scanTable[scanDesc].recordIndex = i + 1);
@@ -887,7 +887,7 @@ void *AM_FindNextEntry(int scanDesc)
 			scanTable[scanDesc].blockIndex = j;
 			break;
 		}
-		if ( ( j = (int)currentData[NEXT] ) != -1 )
+		if ( ( j = (int)currentData[0] ) != -1 )
 		{
 			CALL_OR_EXIT( BF_UnpinBlock(currentBlock) );
 			CALL_OR_EXIT( BF_GetBlock(scanTable[scanDesc].fileDesc, j, currentBlock) );
