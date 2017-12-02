@@ -819,7 +819,7 @@ int AM_OpenIndexScan(int fileDesc, int op, void *value)
 			const char type       = (char) metaData[IDENTIFIER];
 			const int root        = (int)  metaData[ROOT];
 
-			CALL_OR_DIE(BF_UnpinBlock(metaBlock));
+			CALL_OR_EXIT(BF_UnpinBlock(metaBlock));
 			BF_Block_Destroy(&metaBlock);
 
 			int b, r;
