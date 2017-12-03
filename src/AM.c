@@ -223,6 +223,7 @@ static bool isAM (const int fileDesc)
 
 int AM_DestroyIndex(char *fileName)
 {
+	// Check if the file is currently open i.e. Can be found inside the fileTable struct
 	bool isOpen = false;
 	for (unsigned i = 0; i < MAXOPENFILES; i++)
 	{
@@ -236,6 +237,7 @@ int AM_DestroyIndex(char *fileName)
 
 	if (!isOpen)
 	{
+		// The file can be destroyed so attempt to delete it
 		int fileDesc;
 		CALL_OR_EXIT(BF_OpenFile(fileName, &fileDesc));
 
@@ -247,11 +249,14 @@ int AM_DestroyIndex(char *fileName)
 		return (AM_errno = (!remove(fileName) ? AME_OK : AME_DESTROY_FAILED_REMOVE));
 	}
 
+	// The file has been opened and thus cannot be deleted
+	// Set AM_errno appropriately
 	return (AM_errno = AME_DESTROY_FAILED_OPEN);
 }
 
 int AM_OpenIndex (char *fileName)
 {
+	// Open the specified file and check whether or not it is actually an AM file
 	int fileDesc;
 	CALL_OR_EXIT(BF_OpenFile(fileName, &fileDesc));
 
@@ -260,6 +265,7 @@ int AM_OpenIndex (char *fileName)
 
 	AM_errno = AME_OK;
 	
+	// Scan the fileTable struct for an unused cell
 	unsigned i;
 	for (i = 0; i < MAXOPENFILES; i++)
 	{
@@ -273,6 +279,8 @@ int AM_OpenIndex (char *fileName)
 		}
 	}
 
+	// If an unused cell was found return its index otherwise
+	// return an error code after appropriately setting the AM_errno
 	return (i < MAXOPENFILES ? i : (AM_errno = AME_OPEN_FAILED_LIMIT));
 }
 
@@ -281,15 +289,21 @@ int AM_CloseIndex (int fileDesc)
 	if (!isAM(fileDesc))
 		return (AM_errno = AME_NOT_AM_FILE);
 
+	// Check if there are active scans on the file
+	// In case there are the file cannot be closed
+	// Return appropriate error code
 	int i;
 	for (i = 0; i < MAXSCANS; i++)
 		if (fileDesc == scanTable[i].fileDesc)
 			return (AM_errno = AME_CLOSE_FAILED_SCANS);
 
+	// In case there are not active scans on the file
+	// Search the fileTable for an entry corresponding to the file
 	for (i = 0; i < MAXOPENFILES; i++)
 	{
 		if (fileDesc == fileTable[i].fileDesc)
 		{
+			// Found -> Erase the entry's contents and BF_CloseFile the file
 			CALL_OR_EXIT(BF_CloseFile(fileTable[i].fileDesc));
 
 			free(fileTable[i].fileName);
@@ -300,6 +314,7 @@ int AM_CloseIndex (int fileDesc)
 		}
 	}
 
+	// Set appropriately AM_errno and return it
 	return (AM_errno = (i > MAXOPENFILES ? AME_CLOSE_FAILED_UNOPENED : AME_OK));
 }
 
@@ -381,7 +396,7 @@ static void printRec(const int fd, const int blockIndex, char * const metaData)
 	BF_Block_Destroy(&parentBlock);
 }
 
-void debugPrint(const int fd)
+static void debugPrint(const int fd)
 {
 	static unsigned iteration = 1;
 
@@ -397,10 +412,9 @@ void debugPrint(const int fd)
 }
 
 void *newKey;
-  
+
 static void InsertInBlack(int fileDesc, char *data) 
 {
-	
 	//This is the block that was created during previous split
 	int newSplitBlock;
 	CALL_OR_EXIT(BF_GetBlockCounter(fileDesc, &newSplitBlock));
@@ -484,7 +498,7 @@ static void *SplitBlack(int fileDesc, int target, void *key)
 	char *newData = BF_Block_GetData(newBlock);
 
 	newData[IDENTIFIER] = BLACK;
-
+	//WATCH IT HERE
 	int newKeys = ( ((int)(data[NUMKEYS]) % 2) ? (((int)data[NUMKEYS] / 2) + 1) : ((int)data[NUMKEYS] / 2));
 	memcpy( &newData[NUMKEYS], &newKeys, 4);
 	int oldKeys = (int)data[NUMKEYS] / 2;
@@ -540,6 +554,7 @@ static void *SplitBlack(int fileDesc, int target, void *key)
 		memcpy( &newData[FIRST], &data[POINTER(i)], 4);
 		for (int j = 0; j < (int)newData[NUMKEYS]; j++) {
 			//Push new key into correct place in OLD block
+
 			if ( less(key, &data[BLACKKEY(j)], attrType1) ) {
 				memmove( &data[BLACKKEY(j + 1)], &data[BLACKKEY(j)], KEYPOINTERSIZE * ((int)data[NUMKEYS] - (j + 1)) );
 				memcpy ( &newData[BLACKKEY(j)], key, attrLength1 );
@@ -726,6 +741,7 @@ static int InsertRec(int fileDesc, void *value1, void *value2, int subRoot)
 	}
 }
 
+
 int AM_InsertEntry(int fileDesc, void *value1, void *value2) 
 {
 	if (!isAM(fileDesc))
@@ -827,6 +843,7 @@ int AM_InsertEntry(int fileDesc, void *value1, void *value2)
 	return (AM_errno = AME_ERROR);
 }
 
+// Recursively search the B+ tree for the specified value
 static void search(int fileDesc, char * metaData, int root, void * value, int * const b, int * const r)
 {
 	BF_Block * block;
@@ -838,6 +855,7 @@ static void search(int fileDesc, char * metaData, int root, void * value, int * 
 
 	if (data[IDENTIFIER] == BLACK)
 	{
+		// Compare each BLACKKEY with the given value (LESS_THAN)
 		unsigned i;
 		for (i = 0; i < (int) data[NUMKEYS]; i++)
 		{
@@ -851,10 +869,15 @@ static void search(int fileDesc, char * metaData, int root, void * value, int * 
 		CALL_OR_EXIT(BF_UnpinBlock(block));
 		BF_Block_Destroy(&block);
 
+		// (pointer_(i) | key_(i) | pointer_(i + 1))
+		// Recursively search subtree at pointer_(i) where key_(i) >= value
+		// If there s no such case search subtree at pointer_("NUMKEYS")
 		search(fileDesc, metaData, _root, value, b, r);
 	}
 	else if (data[IDENTIFIER] == RED)
 	{
+		// Compare each REDKEY with the given value (GREATER_THAN_OR_EQUAL)
+		// so that |REDKEY - value| = min
 		unsigned i;
 		for (i = 0; i < (int) data[RECORDS]; i++)
 		{
@@ -866,6 +889,8 @@ static void search(int fileDesc, char * metaData, int root, void * value, int * 
 		CALL_OR_EXIT(BF_UnpinBlock(block));
 		BF_Block_Destroy(&block);
 
+		// Return the red block's index and the record's index
+		// in order to make good use of them in "AM_FindNextEntry"
 		*b = root;
 		*r = i;
 	}
@@ -878,11 +903,15 @@ int AM_OpenIndexScan(int fileDesc, int op, void *value)
 
 	AM_errno = AME_OK;
 
+	// Search the fileTable for an entry corresponding to the specified fileDesc
 	unsigned i;
 	for (i = 0; i < MAXOPENFILES; i++)
 		if (fileTable[i].fileDesc == fileDesc)
 			break;
 
+	// In case the file has not been opened yet
+	// and thus cannot be found inside the fileTable
+	// appropriately set the AM_errno and return
 	if (i == MAXOPENFILES)
 		return (AM_errno = AME_SCAN_FAILED_UNOPENED);
 
@@ -890,6 +919,8 @@ int AM_OpenIndexScan(int fileDesc, int op, void *value)
 	{
 		if (scanTable[i].fileDesc == UNDEFINED)
 		{
+			// We found an empty cell
+
 			BF_Block * metaBlock;
 
 			BF_Block_Init(&metaBlock);
@@ -897,17 +928,43 @@ int AM_OpenIndexScan(int fileDesc, int op, void *value)
 			
 			char * metaData = BF_Block_GetData(metaBlock);
 
-			const int root = (int) metaData[ROOT];
+			int root = (int) metaData[ROOT];
 
 			scanTable[i].fileDesc = fileDesc;
 			scanTable[i].op = op;
 			if( ( op == NOT_EQUAL ) || (op == LESS_THAN) || (op == LESS_THAN_OR_EQUAL) )
 			{
+				BF_Block * current;
+				BF_Block_Init(&current);
+
+				CALL_OR_EXIT(BF_GetBlock(fileDesc, root, current));
+
+				char * data = BF_Block_GetData(current);
+
+				while (data[IDENTIFIER] != RED)
+				{
+					root = (int) data[POINTER(0, metaData)];
+
+					CALL_OR_EXIT(BF_UnpinBlock(current));
+
+					CALL_OR_EXIT(BF_GetBlock(fileDesc, root, current));
+
+					data = BF_Block_GetData(current);
+				}
+				
+				CALL_OR_EXIT(BF_UnpinBlock(current));
+				BF_Block_Destroy(&current);
+
+				// In this case(s) we need to scan the red level of
+				// the B+ tree left to right and thus we start the scan
+				// from the left-most record
+
 				scanTable[i].blockIndex = root;
 				scanTable[i].recordIndex = 0;
 			}
 			else
 			{
+				// Follow documentation at Function "search"
 				int b, r;
 				search(fileDesc, metaData, root, value, &b, &r);
 
@@ -945,197 +1002,47 @@ void *AM_FindNextEntry(int scanDesc)
 	BF_Block_Init(&currentBlock);
 	CALL_OR_EXIT( BF_GetBlock(scanTable[scanDesc].fileDesc, scanTable[scanDesc].blockIndex, currentBlock) );
 	char * currentData = BF_Block_GetData(currentBlock);
+  
 	void *returnValue = malloc((int)metaData[ATTRLENGTH2]);
-	bool found = false;
-	int j = scanTable[scanDesc].blockIndex;
-	while(j != -1) {
-		int i;
-		for(i = scanTable[scanDesc].recordIndex; i < (int)currentData[RECORDS]; i++) {
-			if(compare( (void *)&currentData[(int)REDKEY(i)], scanTable[scanDesc].value, scanTable[scanDesc].op, metaData[ATTRTYPE1]))
-			{
-				memcpy(returnValue , &(currentData[(int)VALUE(i)]), (int)metaData[ATTRLENGTH2]);
-				( (i + 1) == (int)currentData[RECORDS] ) ? (scanTable[scanDesc].recordIndex = 0) : (scanTable[scanDesc].recordIndex = i + 1);
-				found = true;
-				break;
-			}
-		}
-		if( found )
-		{
-			scanTable[scanDesc].blockIndex = j;
-			scanTable[scanDesc].recordIndex = i;
-			break;
-		}
-		if ( ( j = (int)currentData[NEXT] ) != -1 )
-		{
-			CALL_OR_EXIT( BF_UnpinBlock(currentBlock) );
-			CALL_OR_EXIT( BF_GetBlock(scanTable[scanDesc].fileDesc, j, currentBlock) );
-			currentData = BF_Block_GetData(currentBlock);
-		}
-	}
-	if(!found)
+	int i = scanTable[scanDesc].recordIndex;
+
+	if(compare( (void *)&currentData[(int)REDKEY(i ,metaData)], scanTable[scanDesc].value, scanTable[scanDesc].op, metaData[ATTRTYPE1]))
 	{
-		AM_errno = AME_ERROR;
-		scanTable[scanDesc].returnValue = NULL;
+		memcpy(returnValue , &(currentData[(int)VALUE(i ,metaData)]), (int)metaData[ATTRLENGTH2]);
+		if( (i + 1) == (int)currentData[RECORDS] )
+		{
+			scanTable[scanDesc].recordIndex = 0;
+			scanTable[scanDesc].blockIndex = (int)currentData[NEXT];
+		}
+		else
+			scanTable[scanDesc].recordIndex = i + 1;
+	}
+	else
+	{
+		AM_errno = AME_EOF;
+		returnValue = NULL;
 	}
 
-	/*switch(scanTable[scanDesc].op)
-	{
-		case EQUAL:
-			if( ( scanTable[scanDesc].recordIndex < currentData[RECORDS] ) && ( compare( (void *)currentData[(int)REDKEY( scanTable[scanDesc].recordIndex ,metaData)], scanTable[scanDesc].value, scanTable[scanDesc].op, metaData[ATTRTYPE1] ) ))
-			{
-				memcpy(&(scanTable[scanDesc].returnValue), &(currentData[(int)VALUE(scanTable[scanDesc].recordIndex ,metaData)]), (int)metaData[ATTRLENGTH2]);
-				scanTable[scanDesc].recordIndex++;
-				break;
-			}
-			AM_errno = AME_ERROR;
-			scanTable[scanDesc].returnValue = NULL;
-			break;
-		case NOT_EQUAL:
-			bool found = false;
-			int j = scanTable[scanDesc].blockIndex;
-			while(true) {
-				for(int i = scanTable[scanDesc].recordIndex; i < (int)currentData[RECORDS]; i++) {
-					if(compare( (void *)currentData[(int)REDKEY(i ,metaData)], scanTable[scanDesc].value, scanTable[scanDesc].op,metaData[ATTRTYPE1]))
-					{
-						memcpy(&(scanTable[scanDesc].returnValue), &(currentData[(int)VALUE(i ,metaData)]), (int)metaData[ATTRLENGTH2]);
-						scanTable[scanDesc].recordIndex = i + 1;
-						j = -1;
-						found = true;
-						break;
-					}
-				}
-				if( j == -1 )//perhaps mistake
-					break;
-				if ( ( j = (int)currentData[NEXT] ) == -1 )
-				{
-					CALL_OR_EXIT( BF_UnpinBlock(currentBlock) );
-					CALL_OR_EXIT( BF_GetBlock(scanTable[scanDesc].fileDesc, j, currentBlock) );
-					currentData = BF_Block_GetData(currentBlock);
-				}
-				else
-					scanTable[scanDesc].recordIndex = 0;
-			}
-			if(!found)
-			{
-				AM_errno = AME_ERROR;
-				scanTable[scanDesc].returnValue = NULL;
-			}
-			break;
-		case LESS_THAN:
-			bool found = false;
-			int j = metaData[ROOT];
-			while(true) {
-				for(int i = scanTable[scanDesc].recordIndex; i < (int)currentData[RECORDS]; i++) {
-					if(compare( (void *)currentData[(int)REDKEY(i ,metaData)], scanTable[scanDesc].value, scanTable[scanDesc].op, metaData[ATTRTYPE1]))
-					{
-						memcpy(&(scanTable[scanDesc].returnValue), &(currentData[(int)VALUE(i ,metaData)]), (int)metaData[ATTRLENGTH2]);
-						scanTable[scanDesc].recordIndex = i + 1;
-						j = -1;
-						found = true;
-						break;
-					}
-				}
-				if( j == -1 )
-					break;
-				if ( ( j = (int)currentData[NEXT] ) == -1 )
-				{
-					CALL_OR_EXIT( BF_UnpinBlock(currentBlock) );
-					CALL_OR_EXIT( BF_GetBlock(scanTable[scanDesc].fileDesc, j, currentBlock) );
-					currentData = BF_Block_GetData(currentBlock);
-				}
-				else
-					scanTable[scanDesc].recordIndex = 0;
-			}
-			if(!found)
-			{
-				AM_errno = AME_ERROR;
-				scanTable[scanDesc].returnValue = NULL;
-			}
-			break;
-		case GREATER_THAN:
-			bool found = false;
-			int j = metaData[ROOT];
-			while(true) {
-				for(int i = scanTable[scanDesc].recordIndex; i < (int)currentData[RECORDS]; i++) {
-					if(compare( (void *)currentData[(int)REDKEY(i ,metaData)], scanTable[scanDesc].value, scanTable[scanDesc].op, metaData[ATTRTYPE1]))
-					{
-						memcpy(&(scanTable[scanDesc].returnValue), &(currentData[(int)VALUE(i ,metaData)]), (int)metaData[ATTRLENGTH2]);
-						scanTable[scanDesc].recordIndex = i + 1;
-						j = -1;
-						found = true;
-						break;
-					}
-				}
-				if( j == -1 )
-					break;
-				if ( ( j = (int)currentData[NEXT] ) == -1 )
-				{
-					CALL_OR_EXIT( BF_UnpinBlock(currentBlock) );
-					CALL_OR_EXIT( BF_GetBlock(scanTable[scanDesc].fileDesc, j, currentBlock) );
-					currentData = BF_Block_GetData(currentBlock);
-				}
-				else
-					scanTable[scanDesc].recordIndex = 0;
-			}
-			if(!found)
-			{
-				AM_errno = AME_ERROR;
-				scanTable[scanDesc].returnValue = NULL;
-			}
-			break;
-		case LESS_THAN_OR_EQUAL:
-			bool found = false;
-			int j = metaData[ROOT];
-			while(true) {
-				for(int i = scanTable[scanDesc].recordIndex; i < (int)currentData[RECORDS]; i++) {
-					if(compare( (void *)currentData[(int)REDKEY(i ,metaData)], scanTable[scanDesc].value, scanTable[scanDesc].op, metaData[ATTRTYPE1]))
-					{
-						memcpy(&(scanTable[scanDesc].returnValue), &(currentData[(int)VALUE(i ,metaData)]), (int)metaData[ATTRLENGTH2]);
-						scanTable[scanDesc].recordIndex = i + 1;
-						j = -1;
-						found = true;
-						break;
-					}
-				}
-				if( j == -1 )
-					break;
-				if ( ( j = (int)currentData[NEXT] ) == -1 )
-				{
-					CALL_OR_EXIT( BF_UnpinBlock(currentBlock) );
-					CALL_OR_EXIT( BF_GetBlock(scanTable[scanDesc].fileDesc, j, currentBlock) );
-					currentData = BF_Block_GetData(currentBlock);
-				}
-				else
-					scanTable[scanDesc].recordIndex = 0;
-			}
-			if(!found)
-			{
-				AM_errno = AME_ERROR;
-				scanTable[scanDesc].returnValue = NULL;
-			}
-			break;
-		case GREATER_THAN_OR_EQUAL:
-	}*/
 	//close last indexed block
 	CALL_OR_EXIT( BF_UnpinBlock(currentBlock) );
 	BF_Block_Destroy(&currentBlock);
 	//close meta block
 	CALL_OR_EXIT( BF_UnpinBlock(metaBlock) );
 	BF_Block_Destroy(&metaBlock);
-	return returnValue;
+	return scanTable[scanDesc].returnValue;
 }
 
 int AM_CloseIndexScan(int scanDesc)
 {
+	// In case of an invalid scanDesc
+	// appropriately set AM_errno and return 
 	if (scanDesc < 0 || scanDesc >= MAXSCANS)
 		return (AM_errno = AME_CLOSE_SCAN_NON_EXISTENT);
 	
 	if (scanTable[scanDesc].fileDesc == UNDEFINED)
 		return (AM_errno = AME_CLOSE_SCAN_NON_EXISTENT);
-
-	if (!isAM(scanTable[scanDesc].fileDesc))
-		return (AM_errno = AME_NOT_AM_FILE);
 		
+	// Erase the scan entry
 	scanTable[scanDesc].fileDesc    = UNDEFINED;
 	scanTable[scanDesc].blockIndex  = UNDEFINED;
 	scanTable[scanDesc].recordIndex = UNDEFINED;
