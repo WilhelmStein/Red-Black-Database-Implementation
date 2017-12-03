@@ -14,26 +14,26 @@ scanData scanTable[MAXSCANS];
 #define BLACK ('B')
 #define RED   ('R')
 
-#define MAXRECORDS(metaData)   ( (BF_BLOCK_SIZE - 9) /  ((int)metaData[ATTRLENGTH1] + (int)metaData[ATTRLENGTH2]) )
-#define RECORDSIZE(metaData)   ( (int)metaData[ATTRLENGTH1] + (int)metaData[ATTRLENGTH2] )
+#define RECORDSIZE   ( attrLength1 + attrLength2 )
+#define MAXRECORDS   ( (BF_BLOCK_SIZE - 9) /  RECORDSIZE )
 
-#define MAXKEYS(metaData)      ( (BF_BLOCK_SIZE - 9) / ((int)metaData[ATTRLENGTH1] + 4) )
-#define KEYPOINTERSIZE(metaData)  ( (int)metaData[ATTRLENGTH1] + 4)
+#define KEYPOINTERSIZE  ( attrLength1 + 4)
+#define MAXKEYS     ( (BF_BLOCK_SIZE - 9) / KEYPOINTERSIZE )
 
 //RED BLOCKS
 //      IDENTIFIER   (0)  //char
 #define RECORDS      (1)  //int
 #define NEXT         (5)  //int
-#define REDKEY(x, metaData)    ( /*FIRSTKEY*/9 + ((x) * RECORDSIZE(metaData)) )
-#define VALUE(x, metaData)     ( /*FIRSTVALUE*/9 + (int)metaData[ATTRLENGTH1] + ((x) * RECORDSIZE(metaData)) )
+#define REDKEY(x)    ( /*FIRSTKEY*/9 + ((x) * RECORDSIZE) )
+#define VALUE(x)     ( /*FIRSTVALUE*/9 + attrLength1 + ((x) * RECORDSIZE) )
 
 //BLACK BLOCKS
 //      IDENTIFIER   (0) //char
 #define NUMKEYS      (1) //int
 //      NEXT         (5) //int
 #define FIRST        (9) //int
-#define BLACKKEY(x, metaData)  ( /*FIRSTKEY*/13 + (x) * ( 4 + (int)metaData[ATTRLENGTH1] ) )
-#define POINTER(x, metaData)   ( /*FIRSTPOINTER*/9 + (x) * ( 4 + (int)metaData[ATTRLENGTH1] ) )
+#define BLACKKEY(x)  ( /*FIRSTKEY*/13 + (x) * ( 4 + attrLength1 ) )
+#define POINTER(x)   ( /*FIRSTPOINTER*/9 + (x) * ( 4 + attrLength1 ) )
 
 //META BLOCK
 #define IDENTIFIER   (0)  //char
@@ -43,6 +43,40 @@ scanData scanTable[MAXSCANS];
 #define ATTRLENGTH2  (4)  //int
 #define ROOT		 (5)  //int
 #define FILENAME	 (9)  //char*
+
+
+
+
+#define CALL_OR_EXIT(call)		\
+{                           	\
+	BF_ErrorCode code = call; 	\
+	if(code != BF_OK) {       	\
+		BF_PrintError(code);    \
+		exit( AME_ERROR );		\
+	}                         	\
+}
+
+static char attrType1 = UNDEFINED;
+static int attrLength1 = UNDEFINED;
+static char attrType2 = UNDEFINED;
+static int attrLength2 = UNDEFINED;
+static int root = UNDEFINED;
+
+static void setMetaData(int fileDesc) {
+	BF_Block * metaBlock;
+	BF_Block_Init(&metaBlock);
+	CALL_OR_EXIT(BF_GetBlock(fileDesc, 0, metaBlock));
+	char *data = BF_Block_GetData(metaBlock);
+
+	attrType1 = data[ATTRTYPE1];
+	attrLength1 = (int)data[ATTRLENGTH1];
+	attrType2 = data[ATTRTYPE2];
+	attrLength2 = (int)data[ATTRLENGTH2];
+	root = (int)data[ROOT];
+
+	CALL_OR_EXIT(BF_UnpinBlock(metaBlock));
+	BF_Block_Destroy(&metaBlock);
+}
  
 static bool less(void *value1, void *value2, char attrType1) 
 {
@@ -89,14 +123,7 @@ static bool compare(void *valueA, void *valueB, int op, char type)
 	}
 }
 
-#define CALL_OR_EXIT(call)		\
-{                           	\
-	BF_ErrorCode code = call; 	\
-	if(code != BF_OK) {       	\
-		BF_PrintError(code);    \
-		exit( AME_ERROR );		\
-	}                         	\
-}
+
 
 void AM_Init()
 {
@@ -296,13 +323,13 @@ static void printBlack(const int i, char * const blackData, char * const metaDat
 	switch(metaData[(int)ATTRTYPE1])
 	{
 		case 'i':
-			printf("  %d  |%d|", *(int *)&blackData[(int)BLACKKEY(i, metaData)], (int)blackData[(int)POINTER(i + 1, metaData)]);
+			printf("  %d  |%d|", *(int *)&blackData[(int)BLACKKEY(i)], (int)blackData[(int)POINTER(i + 1)]);
 			break;
 		case 'f':
-			printf("  %.2f  |%d|", *(float *)&blackData[(int)BLACKKEY(i, metaData)], (int)blackData[(int)POINTER(i + 1, metaData)]);
+			printf("  %.2f  |%d|", *(float *)&blackData[(int)BLACKKEY(i)], (int)blackData[(int)POINTER(i + 1)]);
 			break;
 		case 'c':
-			printf("  %s  |%d|", &blackData[(int)BLACKKEY(i, metaData)], (int)blackData[(int)POINTER(i + 1, metaData)]);
+			printf("  %s  |%d|", &blackData[(int)BLACKKEY(i)], (int)blackData[(int)POINTER(i + 1)]);
 			break;
 	}
 }
@@ -312,26 +339,26 @@ static void printRed(const int i, char * const redData, char * const metaData)
 	switch(metaData[(int)ATTRTYPE1])
 	{
 		case 'i':
-			printf("%d:", *(int *)&redData[(int)REDKEY(i, metaData)]);
+			printf("%d:", *(int *)&redData[(int)REDKEY(i)]);
 			break;
 		case 'f':
-			printf("%.2f:", *(float *)&redData[(int)REDKEY(i, metaData)]);
+			printf("%.2f:", *(float *)&redData[(int)REDKEY(i)]);
 			break;
 		case 'c':
-			printf("%s: ", &redData[(int)REDKEY(i, metaData)]);
+			printf("%s: ", &redData[(int)REDKEY(i)]);
 			break;
 	}
 
 	switch(metaData[(int)ATTRTYPE2])
 	{
 		case 'i':
-			printf("%d| ", *(int *)&redData[(int)VALUE(i, metaData)]);
+			printf("%d| ", *(int *)&redData[(int)VALUE(i)]);
 			break;
 		case 'f':
-			printf("%.2f| ", *(float *)&redData[(int)VALUE(i, metaData)]);
+			printf("%.2f| ", *(float *)&redData[(int)VALUE(i)]);
 			break;
 		case 'c':
-			printf("%s| ", &redData[(int)VALUE(i, metaData)]);
+			printf("%s| ", &redData[(int)VALUE(i)]);
 			break;
 	}
 }
@@ -346,12 +373,12 @@ static void printRec(const int fd, const int blockIndex, char * const metaData)
 
 	if(parentData[IDENTIFIER] == BLACK)
 	{
-		printf("Block Id: %d\nType: Black\nNext: %d\nContents: |%d|", blockIndex, (int)parentData[NEXT], (int)parentData[(int)POINTER(0, metaData)]);
+		printf("Block Id: %d\nType: Black\nNext: %d\nContents: |%d|", blockIndex, (int)parentData[NEXT], (int)parentData[(int)POINTER(0)]);
 		for(int i = 0; i < parentData[NUMKEYS]; i++)
 			printBlack(i, parentData, metaData);
 		printf("\n");
 		for(int i = 0; i <= (int)parentData[NUMKEYS]; i++) {
-			int child = (int)parentData[(int)POINTER(i, metaData)];
+			int child = (int)parentData[(int)POINTER(i)];
 			CALL_OR_EXIT( BF_UnpinBlock(parentBlock) );
 			CALL_OR_EXIT( BF_UnpinBlock(parentBlock) );
 			printRec(fd, child, metaData);
@@ -385,9 +412,9 @@ static void debugPrint(const int fd)
 }
 
 void *newKey;
-  
-static void InsertInBlack(int fileDesc, char *data, char *metaData) {
-	
+
+static void InsertInBlack(int fileDesc, char *data) 
+{
 	//This is the block that was created during previous split
 	int newSplitBlock;
 	CALL_OR_EXIT(BF_GetBlockCounter(fileDesc, &newSplitBlock));
@@ -395,17 +422,17 @@ static void InsertInBlack(int fileDesc, char *data, char *metaData) {
 
 	int i;
 	for (i = 0; i < (int)data[NUMKEYS]; i++ ) {
-		if ( less(newKey, &data[BLACKKEY(i, metaData)], (int)metaData[ATTRTYPE1]) ) {
+		if ( less(newKey, &data[BLACKKEY(i)], attrType1) ) {
 			//Move all bigger keys-pointers to the right
-			memcpy( &data[BLACKKEY(i + 1, metaData)], &data[BLACKKEY(i, metaData)], KEYPOINTERSIZE(metaData) * ((int)data[NUMKEYS] - i) );
+			memmove( &data[BLACKKEY(i + 1)], &data[BLACKKEY(i)], KEYPOINTERSIZE * ((int)data[NUMKEYS] - i) );
 			break;
 		}
 	}
 
 	//Push new key
-	memcpy( &data[BLACKKEY(i, metaData)], newKey, (size_t)metaData[ATTRLENGTH1] );
+	memcpy( &data[BLACKKEY(i)], newKey, attrLength1 );
 	//New pointer is the newly split block
-	memcpy( &data[POINTER(i + 1, metaData)], &newSplitBlock, 4);
+	memcpy( &data[POINTER(i + 1)], &newSplitBlock, 4);
 
 	//Increase number of keys by 1
 	int numkeys = (int)data[NUMKEYS] + 1;
@@ -413,19 +440,20 @@ static void InsertInBlack(int fileDesc, char *data, char *metaData) {
 
 }
 
-static void InsertInRed(int fileDesc, char *data, void *value1, void *value2, char *metaData) {
+static void InsertInRed(int fileDesc, char *data, void *value1, void *value2) 
+{
 	int i;
 	for (i = 0; i < (int)data[RECORDS]; i++) {
-		if ( less(value1, &data[REDKEY(i, metaData)], (int)metaData[ATTRTYPE1]) ) {
+		if ( less(value1, &data[REDKEY(i)], attrType1) ) {
 			//Move all bigger keys-values to the right
-			memcpy( &data[REDKEY(i + 1, metaData)], &data[REDKEY(i, metaData)], RECORDSIZE(metaData) * ((int)data[RECORDS] - i) );
+			memmove( &data[REDKEY(i + 1)], &data[REDKEY(i)], RECORDSIZE * ((int)data[RECORDS] - i) );
 			break;
 		}
 	}
 
 	//Push new record
-	memcpy( &data[REDKEY(i, metaData)], value1, (size_t)metaData[ATTRLENGTH1] );
-	memcpy( &data[VALUE(i, metaData)], value2, (size_t)metaData[ATTRLENGTH2] );
+	memcpy( &data[REDKEY(i)], value1, attrLength1 );
+	memcpy( &data[VALUE(i)], value2, attrLength2 );
 
 	//Increase number of records by 1
 	int records = (int)data[RECORDS] + 1;
@@ -433,7 +461,7 @@ static void InsertInRed(int fileDesc, char *data, void *value1, void *value2, ch
 
 }
 
-static void *SplitBlack(int fileDesc, int target, void *key, char *metaData) 
+static void *SplitBlack(int fileDesc, int target, void *key) 
 {
 	BF_Block *targetBlock;
 	BF_Block_Init(&targetBlock);
@@ -441,26 +469,26 @@ static void *SplitBlack(int fileDesc, int target, void *key, char *metaData)
 	char *data = BF_Block_GetData(targetBlock);
 
 	//Make an array of all the keys in targetBlock + key so we can sort them
-	char *tempArray = malloc( (int)metaData[ATTRLENGTH1] * ( (int)data[NUMKEYS] + 1) );
-	memcpy( &tempArray[0], key, (size_t)metaData[ATTRLENGTH1] );
+	char *tempArray = malloc( attrLength1 * ( (int)data[NUMKEYS] + 1) );
+	memcpy( &tempArray[0], key, attrLength1 );
 	for (int i = 1; i < ( (int)data[NUMKEYS] + 1); i++) {
-		memcpy( &tempArray[i * (int)metaData[ATTRLENGTH1]], &data[BLACKKEY(i - 1, metaData)], (size_t)metaData[ATTRLENGTH1] );
+		memcpy( &tempArray[i * attrLength1], &data[BLACKKEY(i - 1)], attrLength1 );
 	}
 	//sort the array (its already sorted except first index)
-	for (int i = 0; i < (int)metaData[ATTRLENGTH1] * (data[NUMKEYS] + 1); i += (int)metaData[ATTRLENGTH1]) {
-		if ( !less(&tempArray[i], &tempArray[i + (int)metaData[ATTRLENGTH1]], (int)metaData[ATTRTYPE1]) ) {
-			char *temp = malloc( (size_t)metaData[ATTRLENGTH1] );
-			memcpy( temp, &tempArray[i], (size_t)metaData[ATTRLENGTH1] );
-			memcpy( &tempArray[i], &tempArray[i + (int)metaData[ATTRLENGTH1]], (size_t)metaData[ATTRLENGTH1] );
-			memcpy( &tempArray[i + (int)metaData[ATTRLENGTH1]], temp, (size_t)metaData[ATTRLENGTH1] );
+	for (int i = 0; i < attrLength1 * (data[NUMKEYS] + 1); i += attrLength1) {
+		if ( !less(&tempArray[i], &tempArray[i + attrLength1], attrType1) ) {
+			char *temp = malloc( attrLength1 );
+			memcpy( temp, &tempArray[i], attrLength1 );
+			memmove( &tempArray[i], &tempArray[i + attrLength1], attrLength1 );
+			memcpy( &tempArray[i + attrLength1], temp, attrLength1 );
 			free(temp); 
 		}
 		else break;
 	}
 	//find middle index
 	int middleIndex = ( (((int)data[NUMKEYS] + 1) % 2) ? (((int)data[NUMKEYS] + 1) / 2) : ((((int)data[NUMKEYS] + 1) / 2) - 1) ); 
-	void *middleValue = malloc((size_t)metaData[ATTRLENGTH1]);
-	memcpy( middleValue, &tempArray[middleIndex * (int)metaData[ATTRLENGTH1]], (size_t)metaData[ATTRLENGTH1] );
+	void *middleValue = malloc(attrLength1);
+	memcpy( middleValue, &tempArray[middleIndex * attrLength1], attrLength1 );
 	free(tempArray);
 
 	//create new block and split
@@ -476,8 +504,8 @@ static void *SplitBlack(int fileDesc, int target, void *key, char *metaData)
 	int oldKeys = (int)data[NUMKEYS] / 2;
 
 	//if middle value is the new key we are trying to push
-	if ( equal(middleValue, key, metaData[ATTRTYPE1]) ) {
-		memcpy( &newData[BLACKKEY(0, metaData)], &data[BLACKKEY(oldKeys, metaData)], newKeys * KEYPOINTERSIZE(metaData) );
+	if ( equal(middleValue, key, attrType1) ) {
+		memcpy( &newData[BLACKKEY(0)], &data[BLACKKEY(oldKeys)], newKeys * KEYPOINTERSIZE );
 
 		int prevCounter;
 		CALL_OR_EXIT(BF_GetBlockCounter(fileDesc, &prevCounter));
@@ -485,29 +513,28 @@ static void *SplitBlack(int fileDesc, int target, void *key, char *metaData)
 		memcpy( &newData[FIRST], &prevCounter, 4);
 	}
 	//if key is greater than middleValue push it in new block
-	else if ( !less(key, middleValue, metaData[ATTRTYPE1]) ) {
+	else if ( !less(key, middleValue, attrType1) ) {
 		int i;
 		//find the index of the middle value. it will be i
 		for (i = 0; i < (int)data[NUMKEYS]; i++) {
-			if ( equal(middleValue, &data[BLACKKEY(i, metaData)], metaData[ATTRTYPE1]) )
+			if ( equal(middleValue, &data[BLACKKEY(i)], attrType1) )
 				break;
 		}
 		//Copy to new block all data AFTER middle value (i + 1) 
-		//WATCH THE -i
-		memcpy( &newData[BLACKKEY(0, metaData)], &data[BLACKKEY(i + 1, metaData)], KEYPOINTERSIZE(metaData) * ((int)data[NUMKEYS] - i) );
+		memcpy( &newData[BLACKKEY(0)], &data[BLACKKEY(i + 1)], KEYPOINTERSIZE * ((int)data[NUMKEYS] - i) );
 		for (int j = 0; j < (int)newData[NUMKEYS]; j++) {
 			//Push new key into correct place in NEW Block
-			if ( less(key, &newData[BLACKKEY(j, metaData)], metaData[ATTRTYPE1]) ) {
-				memcpy( &newData[BLACKKEY(j + 1, metaData)], &newData[BLACKKEY(j, metaData)], KEYPOINTERSIZE(metaData) * ((int)newData[NUMKEYS] - (j + 1)) );
-				memcpy( &newData[BLACKKEY(j, metaData)], key, (size_t)metaData[ATTRLENGTH1] );
+			if ( less(key, &newData[BLACKKEY(j)], attrType1) ) {
+				memmove( &newData[BLACKKEY(j + 1)], &newData[BLACKKEY(j)], KEYPOINTERSIZE * ((int)newData[NUMKEYS] - (j + 1)) );
+				memcpy( &newData[BLACKKEY(j)], key, attrLength1 );
 				
 				int prevCounter;
 				CALL_OR_EXIT(BF_GetBlockCounter(fileDesc, &prevCounter));
 				prevCounter -= 2;
 				//Pointer right of new key is new block
-				memcpy( &newData[POINTER(j, metaData)], &prevCounter, 4);
+				memcpy( &newData[POINTER(j)], &prevCounter, 4);
 				//First pointer of block is the right pointer of middleValue
-				memcpy( &newData[FIRST], &data[POINTER(i, metaData)], 4);
+				memcpy( &newData[FIRST], &data[POINTER(i)], 4);
 				break;
 			}
 		}
@@ -517,25 +544,26 @@ static void *SplitBlack(int fileDesc, int target, void *key, char *metaData)
 		int i;
 		//find the index of the middle value. it will be i
 		for (i = 0; i < (int)data[NUMKEYS]; i++) {
-			if ( equal(middleValue, &data[BLACKKEY(i, metaData)], metaData[ATTRTYPE1]) )
+			if ( equal(middleValue, &data[BLACKKEY(i)], attrType1) )
 				break;
 		}
 		//Copy to new block all data AFTER middle value (i + 1)
 		//WATCH THE -i
-		memcpy( &newData[BLACKKEY(0, metaData)], &data[BLACKKEY(i + 1, metaData)], KEYPOINTERSIZE(metaData) * ((int)data[NUMKEYS] - i) );
+		memcpy( &newData[BLACKKEY(0)], &data[BLACKKEY(i + 1)], KEYPOINTERSIZE * ((int)data[NUMKEYS] - i) );
 		//First pointer of block is the right pointer of middleValue
-		memcpy( &newData[FIRST], &data[POINTER(i, metaData)], 4);
+		memcpy( &newData[FIRST], &data[POINTER(i)], 4);
 		for (int j = 0; j < (int)newData[NUMKEYS]; j++) {
 			//Push new key into correct place in OLD block
-			if ( less(key, &data[BLACKKEY(j, metaData)], metaData[ATTRTYPE1]) ) {
-				memcpy( &data[BLACKKEY(j + 1, metaData)], &data[BLACKKEY(j, metaData)], KEYPOINTERSIZE(metaData) * ((int)data[NUMKEYS] - (j + 1)) );
-				memcpy ( &newData[BLACKKEY(j, metaData)], key, (size_t)metaData[ATTRLENGTH1] );
+
+			if ( less(key, &data[BLACKKEY(j)], attrType1) ) {
+				memmove( &data[BLACKKEY(j + 1)], &data[BLACKKEY(j)], KEYPOINTERSIZE * ((int)data[NUMKEYS] - (j + 1)) );
+				memcpy ( &newData[BLACKKEY(j)], key, attrLength1 );
 
 				int prevCounter;
 				CALL_OR_EXIT(BF_GetBlockCounter(fileDesc, &prevCounter));
 				prevCounter -= 2;
 				//Pointer right of new key is new block
-				memcpy( &data[POINTER(j, metaData)], &prevCounter, 4);
+				memcpy( &data[POINTER(j)], &prevCounter, 4);
 				break;
 			}
 		}
@@ -561,7 +589,7 @@ static void *SplitBlack(int fileDesc, int target, void *key, char *metaData)
 	return middleValue;
 }
 
-static void *SplitRed(int fileDesc, int target, void *value1, void *value2, char *metaData)  
+static void *SplitRed(int fileDesc, int target, void *value1, void *value2)  
 {
 	BF_Block *targetBlock;
 	BF_Block_Init(&targetBlock);
@@ -580,14 +608,14 @@ static void *SplitRed(int fileDesc, int target, void *value1, void *value2, char
 	char *copyData;
 	int newRecords, offset;
 
-	if ( compare(value1, &data[REDKEY(oldRecords - 1, metaData)], LESS_THAN_OR_EQUAL, metaData[ATTRTYPE1]) ) {
+	if ( compare(value1, &data[REDKEY(oldRecords - 1)], LESS_THAN_OR_EQUAL, attrType1) ) {
 		copyData = data;
 		//needs to go in old block
 		//split happens in oldRecords - 1
 		newRecords = ( (int)data[RECORDS] % 2 ?  ((int)data[RECORDS] - oldRecords) : ((int)data[RECORDS] - oldRecords + 1) );
-		offset = -1;
+		offset = 0;
 		memcpy( &newData[RECORDS], &newRecords, 4);
-		int temp = oldRecords - 1;
+		int temp = oldRecords;
 		memcpy( &data[RECORDS], &temp, 4);
 	}
 	else {
@@ -595,28 +623,24 @@ static void *SplitRed(int fileDesc, int target, void *value1, void *value2, char
 		//needs to go on new block
 		//split happens in oldRecords
 		newRecords = (int)data[RECORDS] - oldRecords - 1;
-		offset = 0;
+		offset = 1;
 		int temp = oldRecords + 1;
 		memcpy( &data[RECORDS], &temp, 4);
 		memcpy( &newData[RECORDS], &newRecords, 4);
 	}
-	memcpy( &newData[REDKEY(0, metaData)], &data[REDKEY(oldRecords + offset, metaData)], RECORDSIZE(metaData) * newRecords);
+	memcpy( &newData[REDKEY(0)], &data[REDKEY(oldRecords + offset)], RECORDSIZE * newRecords);
 
 	int i;
 	for (i = 0; i < (int)copyData[RECORDS]; i++) {
-		if (less( value1, &copyData[REDKEY(i, metaData)], (int)metaData[ATTRTYPE1]) ) {
+		if ( less(value1, &copyData[REDKEY(i)], attrType1) ) {
 			//Move all bigger keys-values to the right
-			memcpy( &copyData[REDKEY(i + 1, metaData)], &copyData[REDKEY(i, metaData)], RECORDSIZE(metaData) *  ((int)copyData[RECORDS] - i));
-			//Push new record
-			memcpy( &copyData[REDKEY(i, metaData)], value1, (size_t)metaData[ATTRLENGTH1] );
-			memcpy( &copyData[VALUE(i, metaData)], value2, (size_t)metaData[ATTRLENGTH2] );
+			memmove( &copyData[REDKEY(i + 1)], &copyData[REDKEY(i)], RECORDSIZE *  ((int)copyData[RECORDS] - i));
 			break;
 		}
 	}
-	if (i == (int)copyData[RECORDS]) {
-		memcpy( &copyData[REDKEY(i, metaData)], value1, (size_t)metaData[ATTRLENGTH1] );
-		memcpy( &copyData[VALUE(i, metaData)], value2, (size_t)metaData[ATTRLENGTH2] );
-	}
+	//Push new record
+	memcpy( &copyData[REDKEY(i)], value1, attrLength1 );
+	memcpy( &copyData[VALUE(i)], value2, attrLength2 );
 
 	int copyRecords = (int)copyData[RECORDS] + 1;
 	memcpy( &copyData[RECORDS], &copyRecords, 4);
@@ -628,8 +652,8 @@ static void *SplitRed(int fileDesc, int target, void *value1, void *value2, char
 	newBlockCounter--;
 	memcpy( &data[NEXT], &newBlockCounter, 4);
 
-	void *retVal = malloc( (size_t)metaData[ATTRLENGTH1] );
-	memcpy(retVal, &newData[REDKEY(0, metaData)], (size_t)metaData[ATTRLENGTH1] );
+	void *retVal = malloc( attrLength1 );
+	memcpy(retVal, &newData[REDKEY(0)], attrLength1 );
 
 	BF_Block_SetDirty(targetBlock);
 	CALL_OR_EXIT(BF_UnpinBlock(targetBlock));
@@ -642,26 +666,26 @@ static void *SplitRed(int fileDesc, int target, void *value1, void *value2, char
 	return retVal;
 }
 
-static int InsertRec(int fileDesc, void *value1, void *value2, char *metaData, int root) 
+static int InsertRec(int fileDesc, void *value1, void *value2, int subRoot) 
 {
 
 	BF_Block *currentBlock;
 	BF_Block_Init(&currentBlock);
-	CALL_OR_EXIT(BF_GetBlock(fileDesc, root, currentBlock));
+	CALL_OR_EXIT(BF_GetBlock(fileDesc, subRoot, currentBlock));
 	char *data = BF_Block_GetData(currentBlock);
 
 	//Base case
 	if (data[IDENTIFIER] == RED) {
 		//Check for space
-		if ( (int)data[RECORDS] != MAXRECORDS(metaData) ) {
-			InsertInRed(fileDesc, data, value1, value2, metaData);
+		if ( (int)data[RECORDS] != MAXRECORDS ) {
+			InsertInRed(fileDesc, data, value1, value2);
 			//Split did not happen on this level so key goes undefined
 			int key = UNDEFINED;
 			memcpy( newKey, &key, 4);
 		}
 		else {
-			void *key = SplitRed(fileDesc, root, value1, value2, metaData);
-			memcpy( newKey, key, (int)metaData[ATTRLENGTH1] );
+			void *key = SplitRed(fileDesc, subRoot, value1, value2);
+			memcpy( newKey, key, attrLength1 );
 			free(key);
 		}
 		BF_Block_SetDirty(currentBlock);
@@ -674,16 +698,16 @@ static int InsertRec(int fileDesc, void *value1, void *value2, char *metaData, i
 	else {
 		int i;
 		for (i = 0; i < (int)data[NUMKEYS]; i++) {
-			if ( less(value1, &data[BLACKKEY(i, metaData)], (int)metaData[ATTRTYPE1]) ) {
+			if ( less(value1, &data[BLACKKEY(i)], attrType1) ) {
 				break;
 			}
 		}
 
-		int nextPointer = (int)data[POINTER(i, metaData)];
+		int nextPointer = (int)data[POINTER(i)];
 		CALL_OR_EXIT(BF_UnpinBlock(currentBlock));
 		BF_Block_Destroy(&currentBlock);
 
-		InsertRec( fileDesc, value1, value2, metaData, nextPointer );
+		InsertRec( fileDesc, value1, value2, nextPointer );
 		//recursion returns here
 
 		//if split happenned
@@ -691,21 +715,21 @@ static int InsertRec(int fileDesc, void *value1, void *value2, char *metaData, i
 
 			BF_Block *currentBlock;
 			BF_Block_Init(&currentBlock);
-			CALL_OR_EXIT(BF_GetBlock(fileDesc, root, currentBlock));
+			CALL_OR_EXIT(BF_GetBlock(fileDesc, subRoot, currentBlock));
 			char *data = BF_Block_GetData(currentBlock);
 
 			//check for space
-			if ( (int)data[NUMKEYS] != MAXKEYS(metaData) ) {
+			if ( (int)data[NUMKEYS] != MAXKEYS ) {
 				//if there is space
-				InsertInBlack(fileDesc, data, metaData);
+				InsertInBlack(fileDesc, data);
 				//Split did not happen on this level so key goes undefined
 				int key = UNDEFINED;
 				memcpy( newKey, &key, 4);
 			}
 			else {
 				//if there is not
-				void *key = SplitBlack(fileDesc, root, newKey, metaData);
-				memcpy( newKey, key, (int)metaData[ATTRLENGTH1] );
+				void *key = SplitBlack(fileDesc, subRoot, newKey);
+				memcpy( newKey, key, attrLength1 );
 				free(key);
 			}
 			BF_Block_SetDirty(currentBlock);
@@ -723,16 +747,9 @@ int AM_InsertEntry(int fileDesc, void *value1, void *value2)
 	if (!isAM(fileDesc))
 		return (AM_errno = AME_NOT_AM_FILE);
 	
-	BF_Block *metaBlock;
-	BF_Block_Init(&metaBlock);
-	CALL_OR_EXIT( BF_GetBlock(fileDesc, 0, metaBlock) );
+	setMetaData(fileDesc);
 
-	char *metaData = BF_Block_GetData(metaBlock);
-	int allblocks;
-	CALL_OR_EXIT(BF_GetBlockCounter(fileDesc, &allblocks));
-	int root = (int)metaData[ROOT];
-
-  //First Insert//
+  	//First Insert//
 	if(root == UNDEFINED)
 	{
 		//Create new red block which will be root
@@ -748,11 +765,15 @@ int AM_InsertEntry(int fileDesc, void *value1, void *value2)
 
 		data[IDENTIFIER] = RED;
 
-		memcpy( &data[REDKEY(0, metaData)], value1, (size_t)metaData[ATTRLENGTH1] );
-		memcpy( &data[VALUE(0, metaData)], value2, (size_t)metaData[ATTRLENGTH2] );
+		memcpy( &data[REDKEY(0)], value1, attrLength1 );
+		memcpy( &data[VALUE(0)], value2, attrLength2 );
 		int records = 1;
 		memcpy( &data[RECORDS], &records , 4);
 
+		BF_Block * metaBlock;
+		BF_Block_Init(&metaBlock);
+		CALL_OR_EXIT(BF_GetBlock(fileDesc, 0, metaBlock));
+		char *metaData = BF_Block_GetData(metaBlock);
 		memcpy( &metaData[ROOT], &redBlockCounter, 4);
 
 		int undefined = UNDEFINED;
@@ -770,8 +791,8 @@ int AM_InsertEntry(int fileDesc, void *value1, void *value2)
 	}
 	else {
 
-		newKey = malloc((size_t)metaData[ATTRLENGTH1]);
-		InsertRec(fileDesc, value1, value2, metaData, (int)metaData[ROOT]);
+		newKey = malloc(attrLength1);
+		InsertRec(fileDesc, value1, value2, root);
 
 		//IF ROOT WAS SPLIT CREATE NEW ROOT
 		if (*(int *)newKey != UNDEFINED) {
@@ -787,11 +808,11 @@ int AM_InsertEntry(int fileDesc, void *value1, void *value2)
 
 			data[IDENTIFIER] = BLACK;
 			
-			memcpy( &data[BLACKKEY(0, metaData)], newKey, (size_t)metaData[ATTRLENGTH1] );
-			memcpy( &data[FIRST], &metaData[ROOT], 4);
+			memcpy( &data[BLACKKEY(0)], newKey, attrLength1 );
+			memcpy( &data[FIRST], &root, 4);
 
 			counter -= 2;
-			memcpy( &data[POINTER(1, metaData)], &counter, 4);
+			memcpy( &data[POINTER(1)], &counter, 4);
 
 			int one = 1;
 			memcpy( &data[NUMKEYS], &one, 4 );
@@ -800,6 +821,10 @@ int AM_InsertEntry(int fileDesc, void *value1, void *value2)
 			memcpy( &data[NEXT], &undefined, 4);
 
 			counter++;
+			BF_Block * metaBlock;
+			BF_Block_Init(&metaBlock);
+			CALL_OR_EXIT(BF_GetBlock(fileDesc, 0, metaBlock));
+			char *metaData = BF_Block_GetData(metaBlock);
 			memcpy(&metaData[ROOT], &counter, 4);
 
 			BF_Block_SetDirty(newRoot);
@@ -807,10 +832,9 @@ int AM_InsertEntry(int fileDesc, void *value1, void *value2)
 			BF_Block_Destroy(&newRoot);
 
 			BF_Block_SetDirty(metaBlock);
+			CALL_OR_EXIT(BF_UnpinBlock(metaBlock));
+			BF_Block_Destroy(&metaBlock);
 		}
-
-		CALL_OR_EXIT(BF_UnpinBlock(metaBlock));
-		BF_Block_Destroy(&metaBlock);
 
 		debugPrint(fileDesc);
 		return (AM_errno = AME_OK);
@@ -835,12 +859,12 @@ static void search(int fileDesc, char * metaData, int root, void * value, int * 
 		unsigned i;
 		for (i = 0; i < (int) data[NUMKEYS]; i++)
 		{
-			void * key = (void *) &(data[BLACKKEY(i, metaData)]);
+			void * key = (void *) &(data[BLACKKEY(i)]);
 			if(compare(value, key, LESS_THAN, (char) metaData[ATTRTYPE1]))
 				break;
 		}
 
-		int _root = (int)data[POINTER(i, metaData)];
+		int _root = (int)data[POINTER(i)];
 
 		CALL_OR_EXIT(BF_UnpinBlock(block));
 		BF_Block_Destroy(&block);
@@ -857,7 +881,7 @@ static void search(int fileDesc, char * metaData, int root, void * value, int * 
 		unsigned i;
 		for (i = 0; i < (int) data[RECORDS]; i++)
 		{
-			void * key = (void *) &(data[REDKEY(i, metaData)]);
+			void * key = (void *) &(data[REDKEY(i)]);
 			if(compare(value, key, GREATER_THAN_OR_EQUAL, (char) metaData[ATTRTYPE1]))
 				break;
 		}
