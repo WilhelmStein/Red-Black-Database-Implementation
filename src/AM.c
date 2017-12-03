@@ -859,7 +859,7 @@ static void search(int fileDesc/*, int attrLength1, char type*/, char * metaData
 		unsigned i;
 		for (i = 0; i < (int) data[NUMKEYS]; i++)
 		{
-			void * key = (void *) &(data[BLACKKEY(i, metaData)]);
+			void * key = (void *) &(data[(int)BLACKKEY(i, metaData)]);
 			if(compare(value, key, LESS_THAN, (char) metaData[ATTRTYPE1]))//if(compare(value, key, LESS_THAN, type)
 				break;
 		}
@@ -867,7 +867,7 @@ static void search(int fileDesc/*, int attrLength1, char type*/, char * metaData
 		// CALL_OR_DIE(BF_UnpinBlock(block));
 		// BF_Block_Destroy(&block);
 
-		int _root = POINTER(i, metaData); //9 + i * ( 4 + attrLength1 );
+		int _root = (int)data[POINTER(i, metaData)]; //9 + i * ( 4 + attrLength1 );
 		search(fileDesc, /*attrLength1, type*/metaData, _root, value, b, r);
 	}
 	else if (data[IDENTIFIER] == RED)
@@ -932,7 +932,7 @@ int AM_OpenIndexScan(int fileDesc, int op, void *value)
 			scanTable[i].op = op;
 			if( ( op == NOT_EQUAL ) || (op == LESS_THAN) || (op == LESS_THAN_OR_EQUAL) )
 			{
-				scanTable[i].blockIndex = root;
+				scanTable[i].blockIndex = 0;
 				scanTable[i].recordIndex = 0;
 			}
 			else
@@ -975,8 +975,10 @@ void *AM_FindNextEntry(int scanDesc)
 
 	bool found = false;
 	int j = scanTable[scanDesc].blockIndex;
-	while(true) {
-		for(int i = scanTable[scanDesc].recordIndex; i < (int)currentData[RECORDS]; i++) {
+	while(j != -1) {
+		int i;
+		for(i = scanTable[scanDesc].recordIndex; i < (int)currentData[RECORDS]; i++) {
+			debugPrint(scanTable[scanDesc].fileDesc);
 			if(compare( (void *)&currentData[(int)REDKEY(i ,metaData)], scanTable[scanDesc].value, scanTable[scanDesc].op, metaData[ATTRTYPE1]))
 			{
 				memcpy(&(scanTable[scanDesc].returnValue), &(currentData[(int)VALUE(i ,metaData)]), (int)metaData[ATTRLENGTH2]);
@@ -988,6 +990,7 @@ void *AM_FindNextEntry(int scanDesc)
 		if( found )
 		{
 			scanTable[scanDesc].blockIndex = j;
+			scanTable[scanDesc].recordIndex = i;
 			break;
 		}
 		if ( ( j = (int)currentData[NEXT] ) != -1 )
@@ -995,7 +998,6 @@ void *AM_FindNextEntry(int scanDesc)
 			CALL_OR_EXIT( BF_UnpinBlock(currentBlock) );
 			CALL_OR_EXIT( BF_GetBlock(scanTable[scanDesc].fileDesc, j, currentBlock) );
 			currentData = BF_Block_GetData(currentBlock);
-			break;
 		}
 	}
 	if(!found)
