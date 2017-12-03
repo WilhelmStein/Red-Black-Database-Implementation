@@ -23,15 +23,14 @@ scanData scanTable[MAXSCANS];
 //RED BLOCKS
 //      IDENTIFIER   (0)  //char
 #define RECORDS      (1)  //int
-#define PARENT       (5)  //int
-
+#define NEXT         (5)  //int
 #define REDKEY(x, metaData)    ( /*FIRSTKEY*/9 + ((x) * RECORDSIZE(metaData)) )
 #define VALUE(x, metaData)     ( /*FIRSTVALUE*/9 + (int)metaData[ATTRLENGTH1] + ((x) * RECORDSIZE(metaData)) )
 
 //BLACK BLOCKS
 //      IDENTIFIER   (0) //char
 #define NUMKEYS      (1) //int
-//      PARENT       (5) //int
+//      NEXT         (5) //int
 #define FIRST        (9) //int
 #define BLACKKEY(x, metaData)  ( /*FIRSTKEY*/13 + (x) * ( 4 + (int)metaData[ATTRLENGTH1] ) )
 #define POINTER(x, metaData)   ( /*FIRSTPOINTER*/9 + (x) * ( 4 + (int)metaData[ATTRLENGTH1] ) )
@@ -156,8 +155,8 @@ int AM_CreateIndex(char *fileName,
 
 	memcpy(&data[ATTRLENGTH2], &attrLength2, 1);
 
-	int zero = 0;
-	memcpy(&data[ROOT], &zero, 4);
+	int undefined = UNDEFINED;
+	memcpy(&data[ROOT], &undefined, 4);
 
 	memcpy(&data[FILENAME], fileName, strlen(fileName) + 1);
 
@@ -171,6 +170,7 @@ int AM_CreateIndex(char *fileName,
 
   	BF_Block_SetDirty(block);
 	CALL_OR_EXIT(BF_UnpinBlock(block));
+	BF_Block_Destroy(&block);
 	CALL_OR_EXIT(BF_CloseFile(fileDesc));
 
 	return AM_errno = AME_OK;
@@ -189,6 +189,7 @@ static bool isAM (const int fileDesc)
 	bool flag = (data[IDENTIFIER] == INDEX);
 
 	CALL_OR_EXIT(BF_UnpinBlock(block));
+	BF_Block_Destroy(&block);
 
 	return flag;
 }
@@ -280,10 +281,10 @@ static void printBlack(const int i, char * const blackData, char * const metaDat
 	switch(metaData[(int)ATTRTYPE1])
 	{
 		case 'i':
-			printf("  %d  |%d|", (int)blackData[(int)BLACKKEY(i, metaData)], (int)blackData[(int)POINTER(i + 1, metaData)]);
+			printf("  %d  |%d|", *(int *)&blackData[(int)BLACKKEY(i, metaData)], (int)blackData[(int)POINTER(i + 1, metaData)]);
 			break;
 		case 'f':
-			printf("  %f  |%d|", (float)blackData[(int)BLACKKEY(i, metaData)], (int)blackData[(int)POINTER(i + 1, metaData)]);
+			printf("  %.2f  |%d|", *(float *)&blackData[(int)BLACKKEY(i, metaData)], (int)blackData[(int)POINTER(i + 1, metaData)]);
 			break;
 		case 'c':
 			printf("  %s  |%d|", &blackData[(int)BLACKKEY(i, metaData)], (int)blackData[(int)POINTER(i + 1, metaData)]);
@@ -296,10 +297,10 @@ static void printRed(const int i, char * const redData, char * const metaData)
 	switch(metaData[(int)ATTRTYPE1])
 	{
 		case 'i':
-			printf("%d:", (int)redData[(int)REDKEY(i, metaData)]);
+			printf("%d:", *(int *)&redData[(int)REDKEY(i, metaData)]);
 			break;
 		case 'f':
-			printf("%f:", (float)redData[(int)REDKEY(i, metaData)]);
+			printf("%.2f:", *(float *)&redData[(int)REDKEY(i, metaData)]);
 			break;
 		case 'c':
 			printf("%s: ", &redData[(int)REDKEY(i, metaData)]);
@@ -309,10 +310,10 @@ static void printRed(const int i, char * const redData, char * const metaData)
 	switch(metaData[(int)ATTRTYPE2])
 	{
 		case 'i':
-			printf("%d| ", (int)redData[(int)VALUE(i, metaData)]);
+			printf("%d| ", *(int *)&redData[(int)VALUE(i, metaData)]);
 			break;
 		case 'f':
-			printf("%f| ", (float)redData[(int)VALUE(i, metaData)]);
+			printf("%.2f| ", *(float *)&redData[(int)VALUE(i, metaData)]);
 			break;
 		case 'c':
 			printf("%s| ", &redData[(int)VALUE(i, metaData)]);
@@ -330,7 +331,7 @@ static void printRec(const int fd, const int blockIndex, char * const metaData)
 
 	if(parentData[IDENTIFIER] == BLACK)
 	{
-		printf("Block Id: %d\nType: Black\nContents: |%d|", blockIndex, (int)parentData[(int)POINTER(0, metaData)]);
+		printf("Block Id: %d\nType: Black\nNext: %d\nContents: |%d|", blockIndex, (int)parentData[NEXT], (int)parentData[(int)POINTER(0, metaData)]);
 		for(int i = 0; i < parentData[NUMKEYS]; i++)
 			printBlack(i, parentData, metaData);
 		printf("\n");
@@ -344,7 +345,7 @@ static void printRec(const int fd, const int blockIndex, char * const metaData)
 	}
 	else
 	{
-		printf("Block Id: %d\nType: Red\nContents: ", blockIndex);
+		printf("Block Id: %d\nType: Red\nNext: %d\nContents: ", blockIndex, (int)parentData[NEXT]);
 		for(int i = 0; i < parentData[RECORDS]; i++)
 			printRed(i, parentData, metaData);
 		printf("\n");
@@ -364,7 +365,7 @@ static void debugPrint(const int fd)
 	char *metaData = BF_Block_GetData(metaBlock);
 	int root = (int)metaData[ROOT];
 	printRec(fd, root, metaData);
-	CALL_OR_EXIT( BF_UnpinBlock(metaData) );
+	CALL_OR_EXIT( BF_UnpinBlock(metaBlock) );
 	BF_Block_Destroy(&metaBlock);
 }
   
@@ -384,10 +385,10 @@ static void *SplitBlack(int fileDesc, int target, void *key, char *metaData)
 	//sort the array (its already sorted except first index)
 	for (int i = 0; i < (int)metaData[ATTRLENGTH1] * (data[NUMKEYS] + 1); i += (int)metaData[ATTRLENGTH1]) {
 		if ( !less(&tempArray[i], &tempArray[i + (int)metaData[ATTRLENGTH1]], (int)metaData[ATTRTYPE1]) ) {
-			void *temp = malloc( (size_t)metaData[ATTRLENGTH1] );
-			memcpy( &temp, &tempArray[i], (size_t)metaData[ATTRLENGTH1] );
+			char *temp = malloc( (size_t)metaData[ATTRLENGTH1] );
+			memcpy( temp, &tempArray[i], (size_t)metaData[ATTRLENGTH1] );
 			memcpy( &tempArray[i], &tempArray[i + (int)metaData[ATTRLENGTH1]], (size_t)metaData[ATTRLENGTH1] );
-			memcpy( &tempArray[i + (int)metaData[ATTRLENGTH1]], &temp, (size_t)metaData[ATTRLENGTH1] );
+			memcpy( &tempArray[i + (int)metaData[ATTRLENGTH1]], temp, (size_t)metaData[ATTRLENGTH1] );
 			free(temp); 
 		}
 		else break;
@@ -420,7 +421,7 @@ static void *SplitBlack(int fileDesc, int target, void *key, char *metaData)
 		memcpy( &newData[FIRST], &prevCounter, 4);
 	}
 	//if key is greater than middleValue push it in new block
-	else if ( !less(middleValue, key, metaData[ATTRTYPE1]) ) {
+	else if ( !less(key, middleValue, metaData[ATTRTYPE1]) ) {
 		int i;
 		//find the index of the middle value. it will be i
 		for (i = 0; i < (int)data[NUMKEYS]; i++) {
@@ -478,10 +479,20 @@ static void *SplitBlack(int fileDesc, int target, void *key, char *metaData)
 
 	memcpy( &data[NUMKEYS], &oldKeys, 4);
 
+	memcpy( &newData[NEXT], &data[NEXT], 4);
+
+	int newBlockCounter;
+	CALL_OR_EXIT(BF_GetBlockCounter(fileDesc, &newBlockCounter));
+	newBlockCounter--;
+	memcpy( &data[NEXT], &newBlockCounter, 4);
+
 	BF_Block_SetDirty(targetBlock);
 	CALL_OR_EXIT(BF_UnpinBlock(targetBlock));
+	BF_Block_Destroy(&targetBlock);
+
 	BF_Block_SetDirty(newBlock);
 	CALL_OR_EXIT(BF_UnpinBlock(newBlock));
+	BF_Block_Destroy(&newBlock);
 
 	return middleValue;
 }
@@ -546,13 +557,23 @@ static void *SplitRed(int fileDesc, int target, void *value1, void *value2, char
 	int copyRecords = (int)copyData[RECORDS] + 1;
 	memcpy( &copyData[RECORDS], &copyRecords, 4);
 
+	memcpy( &newData[NEXT], &data[NEXT], 4);
+
+	int newBlockCounter;
+	CALL_OR_EXIT(BF_GetBlockCounter(fileDesc, &newBlockCounter));
+	newBlockCounter--;
+	memcpy( &data[NEXT], &newBlockCounter, 4);
+
 	void *retVal = malloc( (size_t)metaData[ATTRLENGTH1] );
 	memcpy(retVal, &newData[REDKEY(0, metaData)], (size_t)metaData[ATTRLENGTH1] );
 
 	BF_Block_SetDirty(targetBlock);
 	CALL_OR_EXIT(BF_UnpinBlock(targetBlock));
+	BF_Block_Destroy(&targetBlock);
+
 	BF_Block_SetDirty(newBlock);
 	CALL_OR_EXIT(BF_UnpinBlock(newBlock));
+	BF_Block_Destroy(&newBlock);
 
 	return retVal;
 }
@@ -561,7 +582,7 @@ void *newKey;
 
 static int InsertRec(int fileDesc, void *value1, void *value2, char *metaData, int root) 
 {
-	
+
 	printf("ROOT : %d\n", root);
 
 	BF_Block *currentBlock;
@@ -582,7 +603,7 @@ static int InsertRec(int fileDesc, void *value1, void *value2, char *metaData, i
 					memcpy( &data[VALUE(i, metaData)], value2, (size_t)metaData[ATTRLENGTH2] );
 					int records = (int)data[RECORDS] + 1;
 					memcpy( &data[RECORDS], &records, 4 );
-					int key = -1;
+					int key = UNDEFINED;
 					memcpy( newKey, &key, 4 );
 					break;
 				}
@@ -593,12 +614,14 @@ static int InsertRec(int fileDesc, void *value1, void *value2, char *metaData, i
 				memcpy( &data[VALUE(i, metaData)], value2, (size_t)metaData[ATTRLENGTH2] );
 				int records = (int)data[RECORDS] + 1;
 				memcpy( &data[RECORDS], &records, 4) ;
-				int key = -1;
+				int key = UNDEFINED;
 				memcpy( newKey, &key, 4 );
 			}
 
 			BF_Block_SetDirty(currentBlock);
 			CALL_OR_EXIT(BF_UnpinBlock(currentBlock));
+			BF_Block_Destroy(&currentBlock);
+
 			return 0;
 		}
 		else {
@@ -610,6 +633,8 @@ static int InsertRec(int fileDesc, void *value1, void *value2, char *metaData, i
 
 			BF_Block_SetDirty(currentBlock);
 			CALL_OR_EXIT(BF_UnpinBlock(currentBlock));
+			BF_Block_Destroy(&currentBlock);
+
 			return 0;
 		}
 	}
@@ -618,10 +643,13 @@ static int InsertRec(int fileDesc, void *value1, void *value2, char *metaData, i
 		for (i = 0; i < (int)data[NUMKEYS]; i++) {
 			if ( less(value1, &data[BLACKKEY(i, metaData)], (int)metaData[ATTRTYPE1]) ) {
 				int nextPointer = (int)data[POINTER(i, metaData)];
+
 				CALL_OR_EXIT(BF_UnpinBlock(currentBlock));
+				BF_Block_Destroy(&currentBlock);
+
 				InsertRec( fileDesc, value1, value2, metaData, nextPointer );
 				//recursion returns here
-				if (*(int *)newKey != -1) {
+				if (*(int *)newKey != UNDEFINED) {
 					//check for space
 					if ( (int)data[NUMKEYS] != MAXKEYS(metaData) ) {
 						int j;
@@ -637,7 +665,7 @@ static int InsertRec(int fileDesc, void *value1, void *value2, char *metaData, i
 								memcpy( &data[POINTER(j + 1, metaData)], &newBlackBlock, 4);
 								int numkeys = (int)data[NUMKEYS] + 1;
 								memcpy( &data[NUMKEYS], &numkeys, 4);
-								int key = -1;
+								int key = UNDEFINED;
 								memcpy( newKey, &key, 4 );
 								return 0;
 							}
@@ -650,7 +678,7 @@ static int InsertRec(int fileDesc, void *value1, void *value2, char *metaData, i
 						memcpy( &data[POINTER(j + 1, metaData)], &newBlackBlock, 4);
 						int numkeys = (int)data[NUMKEYS] + 1;
 						memcpy( &data[NUMKEYS], &numkeys, 4 );
-						int key = -1;
+						int key = UNDEFINED;
 						memcpy( newKey, &key, 4 );
 						return 0;
 					}
@@ -666,10 +694,13 @@ static int InsertRec(int fileDesc, void *value1, void *value2, char *metaData, i
 
 		if ( i == (int)data[NUMKEYS] ) {
 			int nextPointer = (int)data[POINTER(i, metaData)];
+
 			CALL_OR_EXIT(BF_UnpinBlock(currentBlock));
+			BF_Block_Destroy(&currentBlock);
+
 			InsertRec( fileDesc, value1, value2, metaData, (int)data[POINTER((int)data[NUMKEYS], metaData)] );
 			//base returns here
-			if (*(int *)newKey != -1) {
+			if (*(int *)newKey != UNDEFINED) {
 					//check for space
 					if ( (int)data[NUMKEYS] != MAXKEYS(metaData) ) {
 						int j;
@@ -685,7 +716,7 @@ static int InsertRec(int fileDesc, void *value1, void *value2, char *metaData, i
 								memcpy( &data[POINTER(j + 1, metaData)], &newBlackBlock, 4);
 								int numkeys = (int)data[NUMKEYS] + 1;
 								memcpy( &data[NUMKEYS], &numkeys, 4);
-								int key = -1;
+								int key = UNDEFINED;
 								memcpy( newKey, &key, 4 );
 								return 0;
 							}
@@ -698,7 +729,7 @@ static int InsertRec(int fileDesc, void *value1, void *value2, char *metaData, i
 						memcpy( &data[POINTER(j + 1, metaData)], &newBlackBlock, 4);
 						int numkeys = (int)data[NUMKEYS] + 1;
 						memcpy( &data[NUMKEYS], &numkeys, 4 );
-						int key = -1;
+						int key = UNDEFINED;
 						memcpy( newKey, &key, 4 );
 						return 0;
 					}
@@ -728,7 +759,7 @@ int AM_InsertEntry(int fileDesc, void *value1, void *value2)
 	int root = (int)metaData[ROOT];
 
   //First Insert//
-	if(root == 0)
+	if(root == UNDEFINED)
 	{
 		//Create new red block
 		BF_Block *newRedBlock;
@@ -750,19 +781,25 @@ int AM_InsertEntry(int fileDesc, void *value1, void *value2)
 
 		memcpy( &metaData[ROOT], &redBlockCounter, 4);
 
+		int undefined = UNDEFINED;
+		memcpy( &data[NEXT], &undefined, 4);
+
 		BF_Block_SetDirty(newRedBlock);
 		CALL_OR_EXIT(BF_UnpinBlock(newRedBlock));
+		BF_Block_Destroy(&newRedBlock);
+
 		BF_Block_SetDirty(metaBlock);
 		CALL_OR_EXIT(BF_UnpinBlock(metaBlock));
+		BF_Block_Destroy(&metaBlock);
 
 		return (AM_errno = AME_OK);
 	}
 	else {
-		debugPrint(fileDesc);
+		//debugPrint(fileDesc);
 
 		newKey = malloc((size_t)metaData[ATTRLENGTH1]);
 		InsertRec(fileDesc, value1, value2, metaData, (int)metaData[ROOT]);
-		if (*(int *)newKey != -1) {
+		if (*(int *)newKey != UNDEFINED) {
 			BF_Block *newRoot;
 			BF_Block_Init(&newRoot);
 			CALL_OR_EXIT( BF_AllocateBlock(fileDesc, newRoot) );
@@ -784,54 +821,74 @@ int AM_InsertEntry(int fileDesc, void *value1, void *value2)
 			int one = 1;
 			memcpy( &data[NUMKEYS], &one, 4 );
 
+			int undefined = UNDEFINED;
+			memcpy( &data[NEXT], &undefined, 4);
+
 			counter++;
 			memcpy(&metaData[ROOT], &counter, 4);
+
+			BF_Block_SetDirty(newRoot);
+			CALL_OR_EXIT(BF_UnpinBlock(newRoot));
+			BF_Block_Destroy(&newRoot);
+
+			BF_Block_SetDirty(metaBlock);
 		}
+
+		CALL_OR_EXIT(BF_UnpinBlock(metaBlock));
+		BF_Block_Destroy(&metaBlock);
+
+		debugPrint(fileDesc);
+		return (AM_errno = AME_OK);
 		
 	}
 
-	return AME_OK;
+	return (AM_errno = AME_ERROR);
 }
 
-static void search(int fileDesc, int attrLength1, char type, int root, void * value, int * const b, int * const r)
+static void search(int fileDesc/*, int attrLength1, char type*/, char * metaData, int root, void * value, int * const b, int * const r)
 {
-	// BF_Block * block;
+	BF_Block * block;
 
-	// BF_Block_Init(&block);
-	// CALL_OR_DIE(BF_GetBlock(fileDesc, root, block));
+	BF_Block_Init(&block);
+	CALL_OR_EXIT(BF_GetBlock(fileDesc, root, block));
 
-	// char * data = BF_Block_GetData(block);
+	char * data = BF_Block_GetData(block);
 
-	// if (data[IDENTIFIER] == BLACK)
-	// {
-	// 	for (unsigned i = 0; i < (int) data[NUMKEYS]; i++)
-	// 	{
-	// 		void * key = data[BLACKKEY(i, metaData)];
-	// 		if(compare(value, key, LESS, type)
-	// 			break;
-	// 	}
+	if (data[IDENTIFIER] == BLACK)
+	{
+		unsigned i;
+		for (i = 0; i < (int) data[NUMKEYS]; i++)
+		{
+			void * key = (void *) &(data[(int)BLACKKEY(i, metaData)]);
+			if(compare(value, key, LESS_THAN, (char) metaData[ATTRTYPE1]))//if(compare(value, key, LESS_THAN, type)
+				break;
+		}
 
-	// 	CALL_OR_DIE(BF_UnpinBlock(block));
-	// 	BF_Block_Destroy(&block);
+		// CALL_OR_DIE(BF_UnpinBlock(block));
+		// BF_Block_Destroy(&block);
 
-	// 	int _root = 9 + i * ( 4 + attrLength1 );
-	// 	search(fileDesc, attrLength1, type, _root, value, b, r);
-	// }
-	// else
-	// {
-	// 	for (unsigned i = 0; i < (int) data[RECORDS]; i++)
-	// 	{
-	// 		void * key = data[REDKEY(i, metaData)];
-	// 		if(compare(value, key, GREATER_THAN_OR_EQUAL, type)
-	// 			break;
-	// 	}
+		int _root = (int)data[POINTER(i, metaData)]; //9 + i * ( 4 + attrLength1 );
+		search(fileDesc, /*attrLength1, type*/metaData, _root, value, b, r);
+	}
+	else if (data[IDENTIFIER] == RED)
+	{
+		unsigned i;
+		for (i = 0; i < (int) data[RECORDS]; i++)
+		{
+			void * key = (void *) &(data[REDKEY(i, metaData)]);
+			if(compare(value, key, GREATER_THAN_OR_EQUAL, (char) metaData[ATTRTYPE1]))//if(compare(value, key, GREATER_THAN_OR_EQUAL, type)
+				break;
+		}
 		
-	// 	CALL_OR_DIE(BF_UnpinBlock(block));
-	// 	BF_Block_Destroy(&block);
+		// CALL_OR_DIE(BF_UnpinBlock(block));
+		// BF_Block_Destroy(&block);
 
-	// 	*b = root;
-	// 	*r = i;
-	// }
+		*b = root;
+		*r = i;
+	}
+
+	CALL_OR_EXIT(BF_UnpinBlock(block));
+	BF_Block_Destroy(&block);
 }
 
 int AM_OpenIndexScan(int fileDesc, int op, void *value)
@@ -860,22 +917,22 @@ int AM_OpenIndexScan(int fileDesc, int op, void *value)
 			
 			char * metaData = BF_Block_GetData(metaBlock);
 
-			const int attrLength1 = (int)  metaData[ATTRLENGTH1];
-			const int attrLength2 = (int)  metaData[ATTRLENGTH2];
-			const char type       = (char) metaData[IDENTIFIER];
+			// const int attrLength1 = (int)  metaData[ATTRLENGTH1];
+			// const int attrLength2 = (int)  metaData[ATTRLENGTH2];
+			// const char type       = (char) metaData[IDENTIFIER];
 			const int root        = (int)  metaData[ROOT];
 
-			CALL_OR_EXIT(BF_UnpinBlock(metaBlock));
-			BF_Block_Destroy(&metaBlock);
+			// CALL_OR_EXIT(BF_UnpinBlock(metaBlock));
+			// BF_Block_Destroy(&metaBlock);
 
 			int b, r;
-			search(fileDesc, attrLength1, type, root, value, &b, &r);
+			search(fileDesc, /*attrLength1, type*/metaData, root, value, &b, &r);
 
 			scanTable[i].fileDesc = fileDesc;
 			scanTable[i].op = op;
 			if( ( op == NOT_EQUAL ) || (op == LESS_THAN) || (op == LESS_THAN_OR_EQUAL) )
 			{
-				scanTable[i].blockIndex = root;
+				scanTable[i].blockIndex = 0;
 				scanTable[i].recordIndex = 0;
 			}
 			else
@@ -885,9 +942,12 @@ int AM_OpenIndexScan(int fileDesc, int op, void *value)
 			}
 
 			// Remember to free this shiet !!!
-			scanTable[i].value = malloc(attrLength1);
-			memcpy(scanTable[i].value, value, attrLength1);
-			scanTable[i].returnValue = malloc(attrLength2);
+			scanTable[i].value = malloc((int) metaData[ATTRLENGTH1]);
+			memcpy(scanTable[i].value, value, (int) metaData[ATTRLENGTH1]);
+			scanTable[i].returnValue = malloc((int) metaData[ATTRLENGTH2]);
+
+			CALL_OR_EXIT(BF_UnpinBlock(metaBlock));
+			BF_Block_Destroy(&metaBlock);
 
 			break;
 		}
@@ -906,6 +966,7 @@ void *AM_FindNextEntry(int scanDesc)
 	BF_Block_Init(&metaBlock);
 	CALL_OR_EXIT( BF_GetBlock(scanTable[scanDesc].fileDesc, 0, metaBlock) );
 	char *metaData = BF_Block_GetData(metaBlock);
+
 	//open last indexed block
 	BF_Block *currentBlock;
 	BF_Block_Init(&currentBlock);
@@ -914,9 +975,11 @@ void *AM_FindNextEntry(int scanDesc)
 
 	bool found = false;
 	int j = scanTable[scanDesc].blockIndex;
-	while(true) {
-		for(int i = scanTable[scanDesc].recordIndex; i < (int)currentData[RECORDS]; i++) {
-			if(compare( (void *)currentData[(int)REDKEY(i ,metaData)], scanTable[scanDesc].value, scanTable[scanDesc].op, metaData[ATTRTYPE1]))
+	while(j != -1) {
+		int i;
+		for(i = scanTable[scanDesc].recordIndex; i < (int)currentData[RECORDS]; i++) {
+			debugPrint(scanTable[scanDesc].fileDesc);
+			if(compare( (void *)&currentData[(int)REDKEY(i ,metaData)], scanTable[scanDesc].value, scanTable[scanDesc].op, metaData[ATTRTYPE1]))
 			{
 				memcpy(&(scanTable[scanDesc].returnValue), &(currentData[(int)VALUE(i ,metaData)]), (int)metaData[ATTRLENGTH2]);
 				( (i + 1) == (int)currentData[RECORDS] ) ? (scanTable[scanDesc].recordIndex = 0) : (scanTable[scanDesc].recordIndex = i + 1);
@@ -927,6 +990,7 @@ void *AM_FindNextEntry(int scanDesc)
 		if( found )
 		{
 			scanTable[scanDesc].blockIndex = j;
+			scanTable[scanDesc].recordIndex = i;
 			break;
 		}
 		if ( ( j = (int)currentData[NEXT] ) != -1 )
@@ -934,7 +998,6 @@ void *AM_FindNextEntry(int scanDesc)
 			CALL_OR_EXIT( BF_UnpinBlock(currentBlock) );
 			CALL_OR_EXIT( BF_GetBlock(scanTable[scanDesc].fileDesc, j, currentBlock) );
 			currentData = BF_Block_GetData(currentBlock);
-			break;
 		}
 	}
 	if(!found)
@@ -1098,6 +1161,7 @@ int AM_CloseIndexScan(int scanDesc)
 	if (scanTable[scanDesc].fileDesc == UNDEFINED)
 		return (AM_errno = AME_CLOSE_SCAN_NON_EXISTENT);
 
+	//TODO: maybe not needed
 	if (!isAM(scanTable[scanDesc].fileDesc))
 		return (AM_errno = AME_NOT_AM_FILE);
 		
