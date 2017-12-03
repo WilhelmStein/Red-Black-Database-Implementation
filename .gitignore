@@ -1,4 +1,4 @@
 .vscode/*
 build/*
 EMP-*
-Makefile
+./Makefile
