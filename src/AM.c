@@ -880,7 +880,10 @@ int AM_OpenIndexScan(int fileDesc, int op, void *value)
 			scanTable[i].op = op;
 			if( ( op == NOT_EQUAL ) || (op == LESS_THAN) || (op == LESS_THAN_OR_EQUAL) )
 			{
-				scanTable[i].blockIndex = root;
+
+
+				
+				scanTable[i].blockIndex = ;
 				scanTable[i].recordIndex = 0;
 			}
 			else
