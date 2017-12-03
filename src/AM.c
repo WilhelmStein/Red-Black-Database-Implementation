@@ -793,45 +793,50 @@ int AM_InsertEntry(int fileDesc, void *value1, void *value2)
 	return AME_OK;
 }
 
-static void search(int fileDesc, int attrLength1, char type, int root, void * value, int * const b, int * const r)
+static void search(int fileDesc/*, int attrLength1, char type*/, char * metaData, int root, void * value, int * const b, int * const r)
 {
-	// BF_Block * block;
+	BF_Block * block;
 
-	// BF_Block_Init(&block);
-	// CALL_OR_DIE(BF_GetBlock(fileDesc, root, block));
+	BF_Block_Init(&block);
+	CALL_OR_EXIT(BF_GetBlock(fileDesc, root, block));
 
-	// char * data = BF_Block_GetData(block);
+	char * data = BF_Block_GetData(block);
 
-	// if (data[IDENTIFIER] == BLACK)
-	// {
-	// 	for (unsigned i = 0; i < (int) data[NUMKEYS]; i++)
-	// 	{
-	// 		void * key = data[BLACKKEY(i, metaData)];
-	// 		if(compare(value, key, LESS, type)
-	// 			break;
-	// 	}
+	if (data[IDENTIFIER] == BLACK)
+	{
+		unsigned i;
+		for (i = 0; i < (int) data[NUMKEYS]; i++)
+		{
+			void * key = (void *) &(data[BLACKKEY(i, metaData)]);
+			if(compare(value, key, LESS_THAN, (char) metaData[ATTRTYPE1]))//if(compare(value, key, LESS_THAN, type)
+				break;
+		}
 
-	// 	CALL_OR_DIE(BF_UnpinBlock(block));
-	// 	BF_Block_Destroy(&block);
+		// CALL_OR_DIE(BF_UnpinBlock(block));
+		// BF_Block_Destroy(&block);
 
-	// 	int _root = 9 + i * ( 4 + attrLength1 );
-	// 	search(fileDesc, attrLength1, type, _root, value, b, r);
-	// }
-	// else
-	// {
-	// 	for (unsigned i = 0; i < (int) data[RECORDS]; i++)
-	// 	{
-	// 		void * key = data[REDKEY(i, metaData)];
-	// 		if(compare(value, key, GREATER_THAN_OR_EQUAL, type)
-	// 			break;
-	// 	}
+		int _root = POINTER(i, metaData); //9 + i * ( 4 + attrLength1 );
+		search(fileDesc, /*attrLength1, type*/metaData, _root, value, b, r);
+	}
+	else if (data[IDENTIFIER] == RED)
+	{
+		unsigned i;
+		for (i = 0; i < (int) data[RECORDS]; i++)
+		{
+			void * key = (void *) &(data[REDKEY(i, metaData)]);
+			if(compare(value, key, GREATER_THAN_OR_EQUAL, (char) metaData[ATTRTYPE1]))//if(compare(value, key, GREATER_THAN_OR_EQUAL, type)
+				break;
+		}
 		
-	// 	CALL_OR_DIE(BF_UnpinBlock(block));
-	// 	BF_Block_Destroy(&block);
+		// CALL_OR_DIE(BF_UnpinBlock(block));
+		// BF_Block_Destroy(&block);
 
-	// 	*b = root;
-	// 	*r = i;
-	// }
+		*b = root;
+		*r = i;
+	}
+
+	CALL_OR_EXIT(BF_UnpinBlock(block));
+	BF_Block_Destroy(&block);
 }
 
 int AM_OpenIndexScan(int fileDesc, int op, void *value)
@@ -860,16 +865,16 @@ int AM_OpenIndexScan(int fileDesc, int op, void *value)
 			
 			char * metaData = BF_Block_GetData(metaBlock);
 
-			const int attrLength1 = (int)  metaData[ATTRLENGTH1];
-			const int attrLength2 = (int)  metaData[ATTRLENGTH2];
-			const char type       = (char) metaData[IDENTIFIER];
+			// const int attrLength1 = (int)  metaData[ATTRLENGTH1];
+			// const int attrLength2 = (int)  metaData[ATTRLENGTH2];
+			// const char type       = (char) metaData[IDENTIFIER];
 			const int root        = (int)  metaData[ROOT];
 
-			CALL_OR_EXIT(BF_UnpinBlock(metaBlock));
-			BF_Block_Destroy(&metaBlock);
+			// CALL_OR_EXIT(BF_UnpinBlock(metaBlock));
+			// BF_Block_Destroy(&metaBlock);
 
 			int b, r;
-			search(fileDesc, attrLength1, type, root, value, &b, &r);
+			search(fileDesc, /*attrLength1, type*/metaData, root, value, &b, &r);
 
 			scanTable[i].fileDesc = fileDesc;
 			scanTable[i].op = op;
@@ -885,9 +890,12 @@ int AM_OpenIndexScan(int fileDesc, int op, void *value)
 			}
 
 			// Remember to free this shiet !!!
-			scanTable[i].value = malloc(attrLength1);
-			memcpy(scanTable[i].value, value, attrLength1);
-			scanTable[i].returnValue = malloc(attrLength2);
+			scanTable[i].value = malloc((int) metaData[ATTRLENGTH1]);
+			memcpy(scanTable[i].value, value, (int) metaData[ATTRLENGTH1]);
+			scanTable[i].returnValue = malloc((int) metaData[ATTRLENGTH2]);
+
+			CALL_OR_EXIT(BF_UnpinBlock(metaBlock));
+			BF_Block_Destroy(&metaBlock);
 
 			break;
 		}
@@ -902,46 +910,46 @@ int AM_OpenIndexScan(int fileDesc, int op, void *value)
 void *AM_FindNextEntry(int scanDesc)
 {
 	//open metaData
-	BF_Block *metaBlock;
-	BF_Block_Init(&metaBlock);
-	CALL_OR_EXIT( BF_GetBlock(scanTable[scanDesc].fileDesc, 0, metaBlock) );
-	char *metaData = BF_Block_GetData(metaBlock);
-	//open last indexed block
-	BF_Block *currentBlock;
-	BF_Block_Init(&currentBlock);
-	CALL_OR_EXIT( BF_GetBlock(scanTable[scanDesc].fileDesc, scanTable[scanDesc].blockIndex, currentBlock) );
-	char * currentData = BF_Block_GetData(currentBlock);
+	// BF_Block *metaBlock;
+	// BF_Block_Init(&metaBlock);
+	// CALL_OR_EXIT( BF_GetBlock(scanTable[scanDesc].fileDesc, 0, metaBlock) );
+	// char *metaData = BF_Block_GetData(metaBlock);
+	// //open last indexed block
+	// BF_Block *currentBlock;
+	// BF_Block_Init(&currentBlock);
+	// CALL_OR_EXIT( BF_GetBlock(scanTable[scanDesc].fileDesc, scanTable[scanDesc].blockIndex, currentBlock) );
+	// char * currentData = BF_Block_GetData(currentBlock);
 
-	bool found = false;
-	int j = scanTable[scanDesc].blockIndex;
-	while(true) {
-		for(int i = scanTable[scanDesc].recordIndex; i < (int)currentData[RECORDS]; i++) {
-			if(compare( (void *)currentData[(int)REDKEY(i ,metaData)], scanTable[scanDesc].value, scanTable[scanDesc].op, metaData[ATTRTYPE1]))
-			{
-				memcpy(&(scanTable[scanDesc].returnValue), &(currentData[(int)VALUE(i ,metaData)]), (int)metaData[ATTRLENGTH2]);
-				( (i + 1) == (int)currentData[RECORDS] ) ? (scanTable[scanDesc].recordIndex = 0) : (scanTable[scanDesc].recordIndex = i + 1);
-				found = true;
-				break;
-			}
-		}
-		if( found )
-		{
-			scanTable[scanDesc].blockIndex = j;
-			break;
-		}
-		if ( ( j = (int)currentData[NEXT] ) != -1 )
-		{
-			CALL_OR_EXIT( BF_UnpinBlock(currentBlock) );
-			CALL_OR_EXIT( BF_GetBlock(scanTable[scanDesc].fileDesc, j, currentBlock) );
-			currentData = BF_Block_GetData(currentBlock);
-			break;
-		}
-	}
-	if(!found)
-	{
-		AM_errno = AME_ERROR;
-		scanTable[scanDesc].returnValue = NULL;
-	}
+	// bool found = false;
+	// int j = scanTable[scanDesc].blockIndex;
+	// while(true) {
+	// 	for(int i = scanTable[scanDesc].recordIndex; i < (int)currentData[RECORDS]; i++) {
+	// 		if(compare( (void *)currentData[(int)REDKEY(i ,metaData)], scanTable[scanDesc].value, scanTable[scanDesc].op, metaData[ATTRTYPE1]))
+	// 		{
+	// 			memcpy(&(scanTable[scanDesc].returnValue), &(currentData[(int)VALUE(i ,metaData)]), (int)metaData[ATTRLENGTH2]);
+	// 			( (i + 1) == (int)currentData[RECORDS] ) ? (scanTable[scanDesc].recordIndex = 0) : (scanTable[scanDesc].recordIndex = i + 1);
+	// 			found = true;
+	// 			break;
+	// 		}
+	// 	}
+	// 	if( found )
+	// 	{
+	// 		scanTable[scanDesc].blockIndex = j;
+	// 		break;
+	// 	}
+	// 	if ( ( j = (int)currentData[NEXT] ) != -1 )
+	// 	{
+	// 		CALL_OR_EXIT( BF_UnpinBlock(currentBlock) );
+	// 		CALL_OR_EXIT( BF_GetBlock(scanTable[scanDesc].fileDesc, j, currentBlock) );
+	// 		currentData = BF_Block_GetData(currentBlock);
+	// 		break;
+	// 	}
+	// }
+	// if(!found)
+	// {
+	// 	AM_errno = AME_ERROR;
+	// 	scanTable[scanDesc].returnValue = NULL;
+	// }
 
 	/*switch(scanTable[scanDesc].op)
 	{
@@ -1082,12 +1090,12 @@ void *AM_FindNextEntry(int scanDesc)
 		case GREATER_THAN_OR_EQUAL:
 	}*/
 	//close last indexed block
-	CALL_OR_EXIT( BF_UnpinBlock(currentBlock) );
-	BF_Block_Destroy(&currentBlock);
-	//close meta block
-	CALL_OR_EXIT( BF_UnpinBlock(metaBlock) );
-	BF_Block_Destroy(&metaBlock);
-	return scanTable[scanDesc].returnValue;
+	// CALL_OR_EXIT( BF_UnpinBlock(currentBlock) );
+	// BF_Block_Destroy(&currentBlock);
+	// //close meta block
+	// CALL_OR_EXIT( BF_UnpinBlock(metaBlock) );
+	// BF_Block_Destroy(&metaBlock);
+	// return scanTable[scanDesc].returnValue;
 }
 
 int AM_CloseIndexScan(int scanDesc)
@@ -1098,6 +1106,7 @@ int AM_CloseIndexScan(int scanDesc)
 	if (scanTable[scanDesc].fileDesc == UNDEFINED)
 		return (AM_errno = AME_CLOSE_SCAN_NON_EXISTENT);
 
+	//TODO: maybe not needed
 	if (!isAM(scanTable[scanDesc].fileDesc))
 		return (AM_errno = AME_NOT_AM_FILE);
 		
