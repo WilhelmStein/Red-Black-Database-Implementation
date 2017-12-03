@@ -804,7 +804,7 @@ int AM_InsertEntry(int fileDesc, void *value1, void *value2)
 	return (AM_errno = AME_ERROR);
 }
 
-static void search(int fileDesc/*, int attrLength1, char type*/, char * metaData, int root, void * value, int * const b, int * const r)
+static void search(int fileDesc, char * metaData, int root, void * value, int * const b, int * const r)
 {
 	BF_Block * block;
 
@@ -819,15 +819,16 @@ static void search(int fileDesc/*, int attrLength1, char type*/, char * metaData
 		for (i = 0; i < (int) data[NUMKEYS]; i++)
 		{
 			void * key = (void *) &(data[BLACKKEY(i, metaData)]);
-			if(compare(value, key, LESS_THAN, (char) metaData[ATTRTYPE1]))//if(compare(value, key, LESS_THAN, type)
+			if(compare(value, key, LESS_THAN, (char) metaData[ATTRTYPE1]))
 				break;
 		}
 
-		// CALL_OR_DIE(BF_UnpinBlock(block));
-		// BF_Block_Destroy(&block);
+		int _root = (int)data[POINTER(i, metaData)];
 
-		int _root = (int)data[POINTER(i, metaData)]; //9 + i * ( 4 + attrLength1 );
-		search(fileDesc, /*attrLength1, type*/metaData, _root, value, b, r);
+		CALL_OR_EXIT(BF_UnpinBlock(block));
+		BF_Block_Destroy(&block);
+
+		search(fileDesc, metaData, _root, value, b, r);
 	}
 	else if (data[IDENTIFIER] == RED)
 	{
@@ -835,19 +836,16 @@ static void search(int fileDesc/*, int attrLength1, char type*/, char * metaData
 		for (i = 0; i < (int) data[RECORDS]; i++)
 		{
 			void * key = (void *) &(data[REDKEY(i, metaData)]);
-			if(compare(value, key, GREATER_THAN_OR_EQUAL, (char) metaData[ATTRTYPE1]))//if(compare(value, key, GREATER_THAN_OR_EQUAL, type)
+			if(compare(value, key, GREATER_THAN_OR_EQUAL, (char) metaData[ATTRTYPE1]))
 				break;
 		}
-		
-		// CALL_OR_DIE(BF_UnpinBlock(block));
-		// BF_Block_Destroy(&block);
+
+		CALL_OR_EXIT(BF_UnpinBlock(block));
+		BF_Block_Destroy(&block);
 
 		*b = root;
 		*r = i;
 	}
-
-	CALL_OR_EXIT(BF_UnpinBlock(block));
-	BF_Block_Destroy(&block);
 }
 
 int AM_OpenIndexScan(int fileDesc, int op, void *value)
@@ -876,16 +874,7 @@ int AM_OpenIndexScan(int fileDesc, int op, void *value)
 			
 			char * metaData = BF_Block_GetData(metaBlock);
 
-			// const int attrLength1 = (int)  metaData[ATTRLENGTH1];
-			// const int attrLength2 = (int)  metaData[ATTRLENGTH2];
-			// const char type       = (char) metaData[IDENTIFIER];
-			const int root        = (int)  metaData[ROOT];
-
-			// CALL_OR_EXIT(BF_UnpinBlock(metaBlock));
-			// BF_Block_Destroy(&metaBlock);
-
-			int b, r;
-			search(fileDesc, /*attrLength1, type*/metaData, root, value, &b, &r);
+			const int root = (int) metaData[ROOT];
 
 			scanTable[i].fileDesc = fileDesc;
 			scanTable[i].op = op;
@@ -896,6 +885,9 @@ int AM_OpenIndexScan(int fileDesc, int op, void *value)
 			}
 			else
 			{
+				int b, r;
+				search(fileDesc, metaData, root, value, &b, &r);
+
 				scanTable[i].blockIndex = b;
 				scanTable[i].recordIndex = r;
 			}
@@ -1118,7 +1110,6 @@ int AM_CloseIndexScan(int scanDesc)
 	if (scanTable[scanDesc].fileDesc == UNDEFINED)
 		return (AM_errno = AME_CLOSE_SCAN_NON_EXISTENT);
 
-	//TODO: maybe not needed
 	if (!isAM(scanTable[scanDesc].fileDesc))
 		return (AM_errno = AME_NOT_AM_FILE);
 		
