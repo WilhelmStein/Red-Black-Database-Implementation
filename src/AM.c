@@ -962,11 +962,11 @@ int AM_OpenIndexScan(int fileDesc, int op, void *value)
 void *AM_FindNextEntry(int scanDesc)
 {
 	//open metaData
-
 	BF_Block *metaBlock;
 	BF_Block_Init(&metaBlock);
 	CALL_OR_EXIT( BF_GetBlock(scanTable[scanDesc].fileDesc, 0, metaBlock) );
 	char *metaData = BF_Block_GetData(metaBlock);
+
 	//open last indexed block
 	BF_Block *currentBlock;
 	BF_Block_Init(&currentBlock);
@@ -977,7 +977,7 @@ void *AM_FindNextEntry(int scanDesc)
 	int j = scanTable[scanDesc].blockIndex;
 	while(true) {
 		for(int i = scanTable[scanDesc].recordIndex; i < (int)currentData[RECORDS]; i++) {
-			if(compare( (void *)currentData[(int)REDKEY(i ,metaData)], scanTable[scanDesc].value, scanTable[scanDesc].op, metaData[ATTRTYPE1]))
+			if(compare( (void *)&currentData[(int)REDKEY(i ,metaData)], scanTable[scanDesc].value, scanTable[scanDesc].op, metaData[ATTRTYPE1]))
 			{
 				memcpy(&(scanTable[scanDesc].returnValue), &(currentData[(int)VALUE(i ,metaData)]), (int)metaData[ATTRLENGTH2]);
 				( (i + 1) == (int)currentData[RECORDS] ) ? (scanTable[scanDesc].recordIndex = 0) : (scanTable[scanDesc].recordIndex = i + 1);
