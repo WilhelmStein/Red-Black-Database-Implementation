@@ -59,7 +59,7 @@ extern scanData scanTable[MAXSCANS];
 #define LESS_THAN_OR_EQUAL 5
 #define GREATER_THAN_OR_EQUAL 6
 
-void debugPrint(const int fd);
+//void debugPrint(const int fd);
 
 void AM_Init( void );
 

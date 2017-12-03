@@ -844,12 +844,12 @@ int AM_InsertEntry(int fileDesc, void *value1, void *value2)
 }
 
 // Recursively search the B+ tree for the specified value
-static void search(int fileDesc, char * metaData, int root, void * value, int * const b, int * const r)
+static void search(int fileDesc, int subRoot, void * value, int * const b, int * const r)
 {
 	BF_Block * block;
 
 	BF_Block_Init(&block);
-	CALL_OR_EXIT(BF_GetBlock(fileDesc, root, block));
+	CALL_OR_EXIT(BF_GetBlock(fileDesc, subRoot, block));
 
 	char * data = BF_Block_GetData(block);
 
@@ -860,11 +860,11 @@ static void search(int fileDesc, char * metaData, int root, void * value, int * 
 		for (i = 0; i < (int) data[NUMKEYS]; i++)
 		{
 			void * key = (void *) &(data[BLACKKEY(i)]);
-			if(compare(value, key, LESS_THAN, (char) metaData[ATTRTYPE1]))
+			if(compare(value, key, LESS_THAN, attrType1))
 				break;
 		}
 
-		int _root = (int)data[POINTER(i)];
+		int _subRoot = (int)data[POINTER(i)];
 
 		CALL_OR_EXIT(BF_UnpinBlock(block));
 		BF_Block_Destroy(&block);
@@ -872,7 +872,7 @@ static void search(int fileDesc, char * metaData, int root, void * value, int * 
 		// (pointer_(i) | key_(i) | pointer_(i + 1))
 		// Recursively search subtree at pointer_(i) where key_(i) >= value
 		// If there s no such case search subtree at pointer_("NUMKEYS")
-		search(fileDesc, metaData, _root, value, b, r);
+		search(fileDesc, _subRoot, value, b, r);
 	}
 	else if (data[IDENTIFIER] == RED)
 	{
@@ -882,7 +882,7 @@ static void search(int fileDesc, char * metaData, int root, void * value, int * 
 		for (i = 0; i < (int) data[RECORDS]; i++)
 		{
 			void * key = (void *) &(data[REDKEY(i)]);
-			if(compare(value, key, GREATER_THAN_OR_EQUAL, (char) metaData[ATTRTYPE1]))
+			if(compare(value, key, GREATER_THAN_OR_EQUAL, attrType1))
 				break;
 		}
 
@@ -891,7 +891,7 @@ static void search(int fileDesc, char * metaData, int root, void * value, int * 
 
 		// Return the red block's index and the record's index
 		// in order to make good use of them in "AM_FindNextEntry"
-		*b = root;
+		*b = subRoot;
 		*r = i;
 	}
 }
@@ -921,14 +921,9 @@ int AM_OpenIndexScan(int fileDesc, int op, void *value)
 		{
 			// We found an empty cell
 
-			BF_Block * metaBlock;
+			setMetaData(fileDesc);
 
-			BF_Block_Init(&metaBlock);
-			CALL_OR_EXIT(BF_GetBlock(fileDesc, 0, metaBlock));
-			
-			char * metaData = BF_Block_GetData(metaBlock);
-
-			int root = (int) metaData[ROOT];
+			int subRoot = root;
 
 			scanTable[i].fileDesc = fileDesc;
 			scanTable[i].op = op;
@@ -937,17 +932,17 @@ int AM_OpenIndexScan(int fileDesc, int op, void *value)
 				BF_Block * current;
 				BF_Block_Init(&current);
 
-				CALL_OR_EXIT(BF_GetBlock(fileDesc, root, current));
+				CALL_OR_EXIT(BF_GetBlock(fileDesc, subRoot, current));
 
 				char * data = BF_Block_GetData(current);
 
 				while (data[IDENTIFIER] != RED)
 				{
-					root = (int) data[POINTER(0, metaData)];
+					subRoot = (int) data[POINTER(0)];
 
 					CALL_OR_EXIT(BF_UnpinBlock(current));
 
-					CALL_OR_EXIT(BF_GetBlock(fileDesc, root, current));
+					CALL_OR_EXIT(BF_GetBlock(fileDesc, subRoot, current));
 
 					data = BF_Block_GetData(current);
 				}
@@ -959,26 +954,22 @@ int AM_OpenIndexScan(int fileDesc, int op, void *value)
 				// the B+ tree left to right and thus we start the scan
 				// from the left-most record
 
-				scanTable[i].blockIndex = root;
+				scanTable[i].blockIndex = subRoot;
 				scanTable[i].recordIndex = 0;
 			}
 			else
 			{
 				// Follow documentation at Function "search"
 				int b, r;
-				search(fileDesc, metaData, root, value, &b, &r);
+				search(fileDesc, subRoot, value, &b, &r);
 
 				scanTable[i].blockIndex = b;
 				scanTable[i].recordIndex = r;
 			}
 
 			// Remember to free this shiet !!!
-			scanTable[i].value = malloc((int) metaData[ATTRLENGTH1]);
-			memcpy(scanTable[i].value, value, (int) metaData[ATTRLENGTH1]);
-			scanTable[i].returnValue = malloc((int) metaData[ATTRLENGTH2]);
-
-			CALL_OR_EXIT(BF_UnpinBlock(metaBlock));
-			BF_Block_Destroy(&metaBlock);
+			scanTable[i].value = malloc(attrLength1);
+			memcpy(scanTable[i].value, value, attrLength1);
 
 			break;
 		}
@@ -992,23 +983,21 @@ int AM_OpenIndexScan(int fileDesc, int op, void *value)
 
 void *AM_FindNextEntry(int scanDesc)
 {
-	//open metaData
-	BF_Block *metaBlock;
-	BF_Block_Init(&metaBlock);
-	CALL_OR_EXIT( BF_GetBlock(scanTable[scanDesc].fileDesc, 0, metaBlock) );
-	char *metaData = BF_Block_GetData(metaBlock);
+	AM_errno = AME_OK;
+	setMetaData(scanTable[scanDesc].fileDesc);
+
 	//open last indexed block
 	BF_Block *currentBlock;
 	BF_Block_Init(&currentBlock);
 	CALL_OR_EXIT( BF_GetBlock(scanTable[scanDesc].fileDesc, scanTable[scanDesc].blockIndex, currentBlock) );
 	char * currentData = BF_Block_GetData(currentBlock);
   
-	void *returnValue = malloc((int)metaData[ATTRLENGTH2]);
+	void *returnValue = malloc(attrLength2);
 	int i = scanTable[scanDesc].recordIndex;
 
-	if(compare( (void *)&currentData[(int)REDKEY(i ,metaData)], scanTable[scanDesc].value, scanTable[scanDesc].op, metaData[ATTRTYPE1]))
+	if(compare( (void *)&currentData[(int)REDKEY(i)], scanTable[scanDesc].value, scanTable[scanDesc].op, attrType1))
 	{
-		memcpy(returnValue , &(currentData[(int)VALUE(i ,metaData)]), (int)metaData[ATTRLENGTH2]);
+		memcpy(returnValue , &(currentData[(int)VALUE(i)]), attrLength2);
 		if( (i + 1) == (int)currentData[RECORDS] )
 		{
 			scanTable[scanDesc].recordIndex = 0;
@@ -1026,10 +1015,9 @@ void *AM_FindNextEntry(int scanDesc)
 	//close last indexed block
 	CALL_OR_EXIT( BF_UnpinBlock(currentBlock) );
 	BF_Block_Destroy(&currentBlock);
-	//close meta block
-	CALL_OR_EXIT( BF_UnpinBlock(metaBlock) );
-	BF_Block_Destroy(&metaBlock);
-	return scanTable[scanDesc].returnValue;
+
+
+	return returnValue;
 }
 
 int AM_CloseIndexScan(int scanDesc)
