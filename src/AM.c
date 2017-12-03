@@ -630,8 +630,6 @@ static void *SplitRed(int fileDesc, int target, void *value1, void *value2, char
 static int InsertRec(int fileDesc, void *value1, void *value2, char *metaData, int root) 
 {
 
-	printf("ROOT : %d\n", root);
-
 	BF_Block *currentBlock;
 	BF_Block_Init(&currentBlock);
 	CALL_OR_EXIT(BF_GetBlock(fileDesc, root, currentBlock));
@@ -722,7 +720,7 @@ int AM_InsertEntry(int fileDesc, void *value1, void *value2)
   //First Insert//
 	if(root == UNDEFINED)
 	{
-		//Create new red block
+		//Create new red block which will be root
 		BF_Block *newRedBlock;
 		BF_Block_Init(&newRedBlock);
 		CALL_OR_EXIT( BF_AllocateBlock(fileDesc, newRedBlock) );
@@ -756,10 +754,11 @@ int AM_InsertEntry(int fileDesc, void *value1, void *value2)
 		return (AM_errno = AME_OK);
 	}
 	else {
-		//debugPrint(fileDesc);
 
 		newKey = malloc((size_t)metaData[ATTRLENGTH1]);
 		InsertRec(fileDesc, value1, value2, metaData, (int)metaData[ROOT]);
+
+		//IF ROOT WAS SPLIT CREATE NEW ROOT
 		if (*(int *)newKey != UNDEFINED) {
 			BF_Block *newRoot;
 			BF_Block_Init(&newRoot);
@@ -800,7 +799,6 @@ int AM_InsertEntry(int fileDesc, void *value1, void *value2)
 
 		debugPrint(fileDesc);
 		return (AM_errno = AME_OK);
-		
 	}
 
 	return (AM_errno = AME_ERROR);
@@ -936,7 +934,8 @@ void *AM_FindNextEntry(int scanDesc)
 	bool found = false;
 	int j = scanTable[scanDesc].blockIndex;
 	while(j != -1) {
-		for(int i = scanTable[scanDesc].recordIndex; i < (int)currentData[RECORDS]; i++) {
+		int i;
+		for(i = scanTable[scanDesc].recordIndex; i < (int)currentData[RECORDS]; i++) {
 			if(compare( (void *)&currentData[(int)REDKEY(i ,metaData)], scanTable[scanDesc].value, scanTable[scanDesc].op, metaData[ATTRTYPE1]))
 			{
 				memcpy(&(scanTable[scanDesc].returnValue), &(currentData[(int)VALUE(i ,metaData)]), (int)metaData[ATTRLENGTH2]);
@@ -948,6 +947,7 @@ void *AM_FindNextEntry(int scanDesc)
 		if( found )
 		{
 			scanTable[scanDesc].blockIndex = j;
+			scanTable[scanDesc].recordIndex = i;
 			break;
 		}
 		if ( ( j = (int)currentData[NEXT] ) != -1 )
