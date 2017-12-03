@@ -994,24 +994,44 @@ void *AM_FindNextEntry(int scanDesc)
   
 	void *returnValue = malloc(attrLength2);
 	int i = scanTable[scanDesc].recordIndex;
-
-	if(compare( (void *)&currentData[(int)REDKEY(i)], scanTable[scanDesc].value, scanTable[scanDesc].op, attrType1))
+	if(scanTable[scanDesc].op == EQUAL)
 	{
-		memcpy(returnValue , &(currentData[(int)VALUE(i)]), attrLength2);
-		if( (i + 1) == (int)currentData[RECORDS] )
-		{
-			scanTable[scanDesc].recordIndex = 0;
-			scanTable[scanDesc].blockIndex = (int)currentData[NEXT];
+		bool found = false;
+		for(int i = scanTable[scanDesc].recordIndex; i < currentData[RECORDS]; i++) {
+			if(compare( (void *)&currentData[(int)REDKEY(i)], scanTable[scanDesc].value, scanTable[scanDesc].op, attrType1))
+			{
+				memcpy(returnValue , &(currentData[(int)VALUE(i)]), attrLength2);
+				scanTable[scanDesc].recordIndex = i + 1;
+				found = true;
+			}
 		}
-		else
-			scanTable[scanDesc].recordIndex = i + 1;
+		if(!found)
+		{
+			AM_errno = AME_EOF;
+			returnValue = NULL;
+		}
 	}
 	else
 	{
-		AM_errno = AME_EOF;
-		returnValue = NULL;
-	}
 
+		if(compare( (void *)&currentData[(int)REDKEY(i)], scanTable[scanDesc].value, scanTable[scanDesc].op, attrType1))
+		{
+			memcpy(returnValue , &(currentData[(int)VALUE(i)]), attrLength2);
+			if( (i + 1) == (int)currentData[RECORDS] )
+			{
+				scanTable[scanDesc].recordIndex = 0;
+				scanTable[scanDesc].blockIndex = (int)currentData[NEXT];
+			}
+			else
+				scanTable[scanDesc].recordIndex = i + 1;
+		}
+		else
+		{
+			AM_errno = AME_EOF;
+			returnValue = NULL;
+		}
+
+	}
 	//close last indexed block
 	CALL_OR_EXIT( BF_UnpinBlock(currentBlock) );
 	BF_Block_Destroy(&currentBlock);
